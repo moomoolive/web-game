@@ -6,19 +6,9 @@ This template should help get you started developing with Vue 3, Vuetify and Typ
 
 - [VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=johnsoncodehk.volar)
 
-## What does this template include
+## Template
 
-- Vue 3: Template is completly build with latest vue 3 features like Single file component and <script setup> mode which makes your code much more clean and readable.
-  Router, Directives, Middlewares and Mixins are all configured and prebuilt in to the template.
-- Typescript: The whole project is written with typescipt modular form.
-- Vite: The project is built on top of vite, which have boosted everything from server side rendering up to production bundle. You can read this official article from Vite to know more about it <https://vitejs.dev/guide/why.html>.
-- Vuetify 3: Alpha version of Vuetify 3 is available and is completly configured including custom themes and colors.
-- SCSS: Sass is configured and is integrated to work globally as well as inside local components, it is integrated with vuetify too.
-- Vuex Store: Store is configured with module form that supports multiple versions of stores with dfferent names, as it is more efficient for medium and big projects.
-
-## Latest Updates
-
-- Multilangual Configurations (i18n) added.
+Template based on work from [peshanghiwa](https://github.com/peshanghiwa/Vue3-Vite-Vuetify3-Typescript-Template)
   
 ## Type Support For `.vue` Imports in TS
 
