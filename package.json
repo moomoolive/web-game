@@ -17,6 +17,10 @@
     "*": "prettier -w -u"
   },
   "dependencies": {
+    "@fortawesome/free-brands-svg-icons": "^5.15.4",
+    "@fortawesome/free-regular-svg-icons": "^5.15.4",
+    "@fortawesome/free-solid-svg-icons": "^5.15.4",
+    "@fortawesome/vue-fontawesome": "^3.0.0-5",
     "@mdi/font": "5.9.55",
     "roboto-fontface": "*",
     "vue": "^3.2.6",
