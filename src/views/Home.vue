@@ -1,20 +1,13 @@
 <template>
   <div>
-    hello world
+    hello world {{ vars }}
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from '@vue/runtime-core'
-import { key } from '@/store/index'
-import { useStore } from 'vuex'
+import { ref } from 'vue'
 
-const count = ref(0)
-
-const store = useStore(key)
-const auth = computed(() => {
-  return store.getters.getAuth
-})
+const vars = ref("my var")
 </script>
 
 <style scoped lang="scss">
