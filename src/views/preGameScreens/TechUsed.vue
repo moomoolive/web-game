@@ -24,11 +24,17 @@
 </template>
 
 <script setup lang="ts">
+import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const milliseconds = 3_500
-window.setTimeout(() => router.push("/auto-save-notice"), milliseconds)
+function onNext() {
+  router.push("/auto-save-notice")
+}
+window.setTimeout(onNext, milliseconds)
+window.addEventListener('keydown', onNext)
+onUnmounted(() => window.removeEventListener('keydown', onNext))
 </script>
 
 <style scoped lang="scss">

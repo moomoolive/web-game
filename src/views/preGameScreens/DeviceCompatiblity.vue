@@ -63,6 +63,10 @@
     </div>
 </template>
 
+<script lang="ts">
+export const DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY = "device-is-compatible"
+</script>
+
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ref } from 'vue'
@@ -78,7 +82,6 @@ import {
 import checkOrTimes from '@/components/misc/checkOrTimes.vue'
 
 const router = useRouter()
-
 const allChecksFinished = ref(false)
 const webAssembly = ref(false)
 const threading = ref(false)
@@ -92,12 +95,16 @@ window.setTimeout(async () => {
     threading.value = threadingIsSupported()
     cores.value = deviceHasMultipleCores()
     webGL.value = webGLIsSupported()
+    
     const compiledChecks = [webAssembly.value, threading.value, cores.value, webGL.value]
     deviceIsCompatible.value = compiledChecks.reduce((total, compatible) => total || compatible)
     allChecksFinished.value = true
+    window.localStorage.setItem(DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY, JSON.stringify(true))
+    
     await sleepSeconds(3)
     router.push("/main-menu")
 }, milliseconds)
+
 </script>
 
 <style scoped lang="scss">

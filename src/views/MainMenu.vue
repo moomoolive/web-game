@@ -9,7 +9,7 @@
         <v-btn 
             color="surface" 
             x-large 
-            block 
+            block
             elevation="3" 
             class="mb-4 hover:animate-bounce" 
             @click="$router.push('/game')"
@@ -35,6 +35,11 @@
     </div>
 
     <div class="text-sm sm:text-lg fixed bottom-7 left-7 text-gray-200">
+        <div class="mb-2">
+            <check-or-times class="mr-1" :check="deviceStatus" />
+             Device
+        </div>
+        
         <div class="relative z-0 mb-2">
             <span class="text-green-500 mr-1 relative z-10">
                 <font-awesome-icon :icon="['fas', 'globe-americas']"/>
@@ -61,7 +66,13 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+
 import { APP_VERSION } from '@/consts'
+import { deviceIsCompatible } from '@/libraries/misc'
+import checkOrTimes from '@/components/misc/checkOrTimes.vue'
+
+const deviceStatus = ref(deviceIsCompatible())
 </script>
 
 <style scoped lang="scss">

@@ -20,13 +20,25 @@
 </template>
 
 <script setup lang="ts">
+import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import autoSaveIcon from '@/components/misc/autoSaveIcon.vue'
+import { DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY } from './DeviceCompatiblity.vue'
 
 const router = useRouter()
 const milliseconds = 5_000
-window.setTimeout(() => router.push("/device-compatiblity"), milliseconds)
+function onNext() {
+    const deviceCompatiblityTestPassed = window.localStorage.getItem(DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY)
+    if (!deviceCompatiblityTestPassed) {
+        router.push("/device-compatiblity")
+    } else {
+        router.push("/main-menu")
+    }
+}
+window.setTimeout(onNext, milliseconds)
+window.addEventListener('keydown', onNext)
+onUnmounted(() => window.removeEventListener('keydown', onNext))
 </script>
 
 <style scoped lang="scss">

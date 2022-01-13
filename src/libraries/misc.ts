@@ -31,6 +31,13 @@ export function webGLIsSupported(): boolean {
     return WEBGL.isWebGLAvailable()
 }
 
+export function deviceIsCompatible(): boolean {
+    return webGLIsSupported() &&
+        deviceHasMultipleCores() &&
+        threadingIsSupported() &&
+        webAssemblyIsSupported()
+}
+
 export async function sleepSeconds(seconds: number): Promise<boolean> {
     return new Promise(resolve => {
         window.setTimeout(() => resolve(true), seconds * MILLISECONDS_IN_SECOND)
