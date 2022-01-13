@@ -69,12 +69,12 @@ export class World {
     #loadWorldAssets() {
         const loader = new three.CubeTextureLoader()
         const texture = loader.load([
-            '/basic/posx.jpg',
-            '/basic/negx.jpg',
-            '/basic/posy.jpg',
-            '/basic/negy.jpg',
-            '/basic/posz.jpg',
-            '/basic/negz.jpg',
+            '/world/basic/posx.jpg',
+            '/world/basic/negx.jpg',
+            '/world/basic/posy.jpg',
+            '/world/basic/negy.jpg',
+            '/world/basic/posz.jpg',
+            '/world/basic/negz.jpg',
         ])
         this.#scene.background = texture
     }
