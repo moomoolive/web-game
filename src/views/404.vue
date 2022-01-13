@@ -1,7 +1,7 @@
 <template>
     <div class="fixed w-screen h-screen flex items-center justify-center">
         <div class="text-center">
-            <div class="text-5xl text-cyan-500 mb-4">
+            <div class="text-5xl text-secondary-color mb-4">
                 <font-awesome-icon :icon="['fas', 'frown-open']"/>
             </div>
 
@@ -11,7 +11,7 @@
 
             <div>
                 <v-btn color="surface" block large @click="$router.push('/main-menu')">
-                    <span class="text-cyan-500 mr-2">
+                    <span class="text-secondary-color mr-2">
                         <font-awesome-icon :icon="['fas', 'arrow-left']"/>
                     </span>
                     Back to Menu

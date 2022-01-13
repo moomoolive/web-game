@@ -8,7 +8,7 @@
                 <v-card elevation="2">
                     <div class="p-4 w-64">
                         <v-btn color="primary" x-large block elevation="3" class="mb-4" @click="toMainMenu()">
-                            <font-awesome-icon class="mr-2 text-cyan-500" :icon="['fas', 'bars']"/>
+                            <font-awesome-icon class="mr-2 text-secondary-color" :icon="['fas', 'bars']"/>
                             Main Menu
                         </v-btn>
 

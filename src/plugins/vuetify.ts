@@ -4,6 +4,45 @@ import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/lib/components'
 import * as directives from 'vuetify/lib/directives'
 
+import colors from "@/styles/variables.scss"
+
+interface ColorExport {
+  primaryColor: string
+  secondaryColor: string
+  surfaceColor: string
+  backgroundColor: string
+}
+
+type ColorExportMember = keyof ColorExport
+
+function parseSCSSExport(scssExportExpression: string): ColorExport {
+  const colorsObject = scssExportExpression.split(":export")[1]
+  if (!colorsObject) {
+    throw new Error("SASS_PARSE_ERROR: no ':export' statement found in sass source file")
+  }
+  const withoutSemicolons = colorsObject.replace(/;/gmi, ",")
+  const withoutSpacesAndBrackets = withoutSemicolons.replace(/(\s+|{|})/gmi, "")
+  const keyValuePairs = withoutSpacesAndBrackets
+    .split(",")
+    .filter((keyValuePair: string) => keyValuePair !== "")
+  const colorExport: ColorExport = {
+    primaryColor: "none",
+    secondaryColor: "none",
+    surfaceColor: "none",
+    backgroundColor: "none"
+  }
+  for (const keyValuePair of keyValuePairs) {
+    const [key, value] = keyValuePair.split(":")
+    if (!colorExport[key as ColorExportMember]) {
+      continue
+    }
+    colorExport[key as ColorExportMember] = value
+  }
+  return colorExport
+}
+
+const { primaryColor, secondaryColor, surfaceColor, backgroundColor } = parseSCSSExport(colors)
+
 export const vuetify = createVuetify({
   components,
   directives,
@@ -11,13 +50,13 @@ export const vuetify = createVuetify({
     themes: {
       light: {
         colors: {
-          primary: '#7C3AED',
-          background: '#35495e',
+          primary: primaryColor,
+          background: backgroundColor,
           error: '#DC2626',
           info: '#2563EB',
-          secondary: '#0891B2',
+          secondary: secondaryColor,
           success: '#16A34A',
-          surface: '#404040',
+          surface: surfaceColor,
           warning: '#CA8A04',
         },
         dark: true,

@@ -1,3 +1,5 @@
+@import "./variables.scss";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,4 +11,22 @@
 
 .bg-neutral-500-0\.8 {
     background: rgba(115, 115, 115, 0.8);
+}
+
+// text colors
+.text-primary-color {
+    color: $primary-color;
+}
+
+.text-secondary-color {
+    color: $secondary-color;
+}
+
+// background colors
+.bg-primary-color {
+    color: $primary-color;
+}
+
+.bg-secondary-color {
+    background: $secondary-color;
 }

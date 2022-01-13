@@ -3,7 +3,7 @@
 
         <div>
             <div v-if="!allChecksFinished" class="animate-pulse">
-                <span class="mr-2 text-purple-500">
+                <span class="mr-2 text-primary-color">
                     <loading-spinner/>
                 </span>
                 Checking device compatiblity
@@ -86,7 +86,7 @@ const cores = ref(false)
 const webGL = ref(false)
 const deviceIsCompatible = ref(false)
 
-const milliseconds = 2_000
+const milliseconds = 3_500
 window.setTimeout(async () => {
     webAssembly.value = webAssemblyIsSupported()
     threading.value = threadingIsSupported()
@@ -95,7 +95,7 @@ window.setTimeout(async () => {
     const compiledChecks = [webAssembly.value, threading.value, cores.value, webGL.value]
     deviceIsCompatible.value = compiledChecks.reduce((total, compatible) => total || compatible)
     allChecksFinished.value = true
-    await sleepSeconds(2)
+    await sleepSeconds(3)
     router.push("/main-menu")
 }, milliseconds)
 </script>
