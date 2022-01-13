@@ -10,6 +10,10 @@ import {
     faFrownOpen,
     faArrowLeft,
     faBars,
+    faSave,
+    faThumbsUp,
+    faExclamationTriangle,
+    faCodeBranch,
 } from "@fortawesome/free-solid-svg-icons"
 import { 
     faJs, 
@@ -18,6 +22,10 @@ import {
 } from "@fortawesome/free-brands-svg-icons"
 
 export default [
+    faCodeBranch,
+    faExclamationTriangle,
+    faThumbsUp,
+    faSave,
     faBars,
     faArrowLeft,
     faFrownOpen,

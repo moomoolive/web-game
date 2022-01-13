@@ -7,6 +7,7 @@ import Settings from "@/views/Settings.vue"
 import Performance from "@/views/Performance.vue"
 import About from "@/views/About.vue"
 import NotFound from "@/views/404.vue"
+import preGame from "./modules/preGame"
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -43,7 +44,8 @@ const routes: Array<RouteRecordRaw> = [
     path: "/:pathMatch(.*)*",
     name: "NotFound",
     component: NotFound
-  }
+  },
+  ...preGame,
 ]
 
 const router = createRouter({

@@ -1,3 +1,5 @@
+import { WEBGL } from "three/examples/jsm/WebGL.js"
+
 import { MILLISECONDS_IN_SECOND } from "@/consts"
 
 export function webAssemblyIsSupported(): boolean {
@@ -16,9 +18,17 @@ export function webAssemblyIsSupported(): boolean {
     }
 }
 
-export function coreTechonologiesSupported(): boolean {
-    const threadingIsSupported = Boolean(window.Worker)
-    return threadingIsSupported && webAssemblyIsSupported()
+export function threadingIsSupported(): boolean {
+    return Boolean(window.Worker)
+}
+
+export function deviceHasMultipleCores(): boolean {
+    const numberOfCores = navigator.hardwareConcurrency || 1
+    return numberOfCores > 1
+}
+
+export function webGLIsSupported(): boolean {
+    return WEBGL.isWebGLAvailable()
 }
 
 export async function sleepSeconds(seconds: number): Promise<boolean> {
