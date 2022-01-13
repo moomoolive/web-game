@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+.bg-neutral-500-0\.5 {
+    background: rgba(115, 115, 115, 0.5);
+}
+
+.bg-neutral-500-0\.8 {
+    background: rgba(115, 115, 115, 0.8);
+}
