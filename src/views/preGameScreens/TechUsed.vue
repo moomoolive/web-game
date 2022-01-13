@@ -32,9 +32,14 @@ const milliseconds = 3_500
 function onNext() {
   router.push("/auto-save-notice")
 }
-window.setTimeout(onNext, milliseconds)
+const timeoutId = window.setTimeout(onNext, milliseconds)
 window.addEventListener('keydown', onNext)
-onUnmounted(() => window.removeEventListener('keydown', onNext))
+window.addEventListener('mousedown', onNext)
+onUnmounted(() => {
+    window.clearTimeout(timeoutId)
+    window.removeEventListener('keydown', onNext)
+    window.removeEventListener('mousedown', onNext)
+})
 </script>
 
 <style scoped lang="scss">
