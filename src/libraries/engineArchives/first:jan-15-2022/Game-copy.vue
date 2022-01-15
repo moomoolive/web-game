@@ -32,7 +32,6 @@ import { useRouter } from 'vue-router'
 
 import { Game } from '@/libraries/gameEngine/index'
 import { useActions } from '@/store/lib'
-import { sleepSeconds } from '@/libraries/misc'
 
 const router = useRouter()
 const { confirm } = useActions()
@@ -48,11 +47,10 @@ async function toMainMenu() {
         header: "Exit Game?",
         body: "Any unsaved progress will be lost" 
     })
-    if (!consent) {
-        return
+    if (consent) {
+        showMenu.value = false
+        router.push("/main-menu")
     }
-    showMenu.value = false
-    router.push("/main-menu")
 }
 
 function toggleMenu() {

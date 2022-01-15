@@ -5,7 +5,13 @@ export interface ConfirmState {
     resolver: (arg1: boolean) => void 
 }
 
+export interface DeviceSpecsState {
+    estimatedPhysicalCores: number
+    totalCores: number
+}
+
 export interface RootState {
-    confirm: ConfirmState
+    confirm: ConfirmState,
+    device: DeviceSpecsState
 }
 

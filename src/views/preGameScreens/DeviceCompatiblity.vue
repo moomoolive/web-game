@@ -70,7 +70,6 @@ export const DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY = "device-is-compatible"
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ref } from 'vue'
-import { WebCPU } from 'webcpu'
 
 import loadingSpinner from '@/components/misc/loadingSpinner.vue'
 import { 
@@ -81,8 +80,11 @@ import {
     sleepSeconds
 } from '@/libraries/misc'
 import checkOrTimes from '@/components/misc/checkOrTimes.vue'
+import { useActions } from '@/store/lib'
 
 const router = useRouter()
+const { device } = useActions()
+
 const allChecksFinished = ref(false)
 const webAssembly = ref(false)
 const threading = ref(false)
@@ -90,10 +92,9 @@ const cores = ref(false)
 const webGL = ref(false)
 const deviceIsCompatible = ref(false)
 
-WebCPU.detectCPU().then(r => console.log(r))
-
-const milliseconds = 3_500
+const milliseconds = 1_000
 window.setTimeout(async () => {
+    await device.getCPUSpecs()
     webAssembly.value = webAssemblyIsSupported()
     threading.value = threadingIsSupported()
     cores.value = deviceHasMultipleCores()
@@ -106,8 +107,8 @@ window.setTimeout(async () => {
         return
     } 
     window.localStorage.setItem(DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY, JSON.stringify(true))
-    //await sleepSeconds(1)
-    //router.push("/auto-save-notice")
+    await sleepSeconds(1)
+    router.push("/auto-save-notice")
 }, milliseconds)
 
 </script>

@@ -1,9 +1,11 @@
 import { useStore } from "./index"
 
 import { ConfirmActions, ModalOptions } from "./modules/confirm"
+import { DeviceSpecsActions } from "./modules/device"
 
 interface VuexActions {
     confirm: ConfirmActions
+    device: DeviceSpecsActions
 }
 
 export function useActions(): Readonly<VuexActions> {
@@ -16,6 +18,11 @@ export function useActions(): Readonly<VuexActions> {
             },
             resolveModal(confirm: boolean) {
                 store.dispatch("confirm/resolveModal", confirm)
+            }
+        },
+        device: {
+            async getCPUSpecs() {
+                await store.dispatch("device/getCPUSpecs")
             }
         }
     }

@@ -11,11 +11,13 @@
             x-large 
             block
             elevation="3" 
-            class="mb-4 hover:animate-bounce" 
+            class="mb-4" 
             @click="$router.push('/game')"
         >
-            <font-awesome-icon class="mr-2 text-secondary-color hover:animate-bounce" :icon="['fas', 'gamepad']"/>
-            Play
+            <div class="animate-bounce">
+                <font-awesome-icon class="mr-1 text-secondary-color" :icon="['fas', 'gamepad']"/>
+                Play
+            </div>
         </v-btn>
 
         <v-btn color="surface" x-large block elevation="3" class="mb-4">

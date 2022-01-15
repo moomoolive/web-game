@@ -33,8 +33,6 @@ const mutations: MutationTree<ConfirmState> = {
     [Mutations.RESOLVE_CONFIRM_MODAL](state, payload: boolean) {
         state.resolver(payload)
         state.show = false
-        state.body = ""
-        state.header = ""
     }
 }
 

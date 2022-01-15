@@ -1,7 +1,7 @@
 declare module "webcpu" {
     interface DetectionOptions {
-        hardcore: boolean
-        estimateInNode: boolean
+        hardcore?: boolean
+        estimateInNode?: boolean
     }
 
     interface WebCPUResults {
