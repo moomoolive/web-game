@@ -34,7 +34,7 @@
 
             <v-fade-transition>
                 <div 
-                    v-show="allChecksFinished"
+                    v-show="allChecksFinished && !deviceIsCompatible"
                     class="text-base sm:text-lg ml-1 sm:ml-2 mt-4 text-gray-400"
                 >
                     <div>
@@ -99,10 +99,12 @@ window.setTimeout(async () => {
     const compiledChecks = [webAssembly.value, threading.value, cores.value, webGL.value]
     deviceIsCompatible.value = compiledChecks.reduce((total, compatible) => total || compatible)
     allChecksFinished.value = true
+    if (!deviceIsCompatible.value) {
+        return
+    } 
     window.localStorage.setItem(DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY, JSON.stringify(true))
-    
-    await sleepSeconds(3)
-    router.push("/main-menu")
+    await sleepSeconds(1)
+    router.push("/auto-save-notice")
 }, milliseconds)
 
 </script>

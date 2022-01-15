@@ -30,7 +30,7 @@
 import { ref, onUnmounted, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { World } from '@/libraries/world/basic'
+import { Game } from '@/libraries/gameEngine/index'
 import { useActions } from '@/store/lib'
 
 const router = useRouter()
@@ -38,8 +38,9 @@ const { confirm } = useActions()
 
 const showMenu = ref(false)
 const renderCount = ref(0)
-const world = new World()
-world.setEagerUpdateHook(() => renderCount.value++)
+const game = new Game()
+game.addToDOM()
+game.setEagerUpdateHook(() => renderCount.value++)
 
 async function toMainMenu() {
     const consent = await confirm.modal({ 
@@ -47,6 +48,7 @@ async function toMainMenu() {
         body: "Any unsaved progress will be lost" 
     })
     if (consent) {
+        showMenu.value = false
         router.push("/main-menu")
     }
 }
@@ -54,10 +56,10 @@ async function toMainMenu() {
 function toggleMenu() {
     if (!showMenu.value) {
         showMenu.value = true
-        world.pause()
+        game.pause()
     } else {
         showMenu.value = false
-        world.run()
+        game.run()
     }
 }
 
@@ -70,10 +72,10 @@ function onKeyUp(event: KeyboardEvent) {
 window.addEventListener("keyup", onKeyUp)
 onUnmounted(() => {
     window.removeEventListener("keyup", onKeyUp)
-    world.destroy()
+    game.destroy()
 })
 
-onMounted(() => { world.run() })
+onMounted(() => { game.run() })
 </script>
 
 <style scoped lang="scss">

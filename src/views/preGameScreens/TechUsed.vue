@@ -27,10 +27,17 @@
 import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY } from './DeviceCompatiblity.vue'
+
 const router = useRouter()
 const milliseconds = 3_500
 function onNext() {
-  router.push("/auto-save-notice")
+    const deviceCompatiblityTestPassed = window.localStorage.getItem(DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY)
+    if (!deviceCompatiblityTestPassed) {
+        router.push("/device-compatiblity")
+    } else {
+        router.push("/auto-save-notice")
+    }
 }
 const timeoutId = window.setTimeout(onNext, milliseconds)
 window.addEventListener('keydown', onNext)
