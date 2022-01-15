@@ -4,13 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
-
-.bg-neutral-500-0\.5 {
-    background: rgba(115, 115, 115, 0.5);
+.bg-overlay-0\.5 {
+    background: rgba(75, 85, 99, 0.5);
 }
 
-.bg-neutral-500-0\.8 {
-    background: rgba(115, 115, 115, 0.8);
+.bg-overlay-0\.8 {
+    background: rgba(75, 85, 99, 0.8);
 }
 
 // text colors

@@ -2,7 +2,7 @@
     <div>
         <v-fade-transition>
             <div 
-                class="fixed w-screen h-screen flex items-center justify-center z-10 bg-neutral-500-0.5"
+                class="fixed w-screen h-screen flex items-center justify-center z-10 bg-overlay-0.5"
                 v-show="showMenu"
             >
                 <v-card elevation="2">
@@ -20,7 +20,7 @@
             </div>
         </v-fade-transition>
 
-        <div class="fixed top-7 left-7 p-2 bg-neutral-500-0.8">
+        <div class="fixed top-7 left-7 p-2 bg-overlay-0.8">
             Render Count {{ renderCount }}
         </div>
     </div>
@@ -31,16 +31,24 @@ import { ref, onUnmounted, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { World } from '@/libraries/world/basic'
+import { useActions } from '@/store/lib'
 
 const router = useRouter()
+const { confirm } = useActions()
 
 const showMenu = ref(false)
 const renderCount = ref(0)
 const world = new World()
 world.setEagerUpdateHook(() => renderCount.value++)
 
-function toMainMenu() {
-    router.push("/main-menu")
+async function toMainMenu() {
+    const consent = await confirm.modal({ 
+        header: "Exit Game?",
+        body: "Any unsaved progress will be lost" 
+    })
+    if (consent) {
+        router.push("/main-menu")
+    }
 }
 
 function toggleMenu() {

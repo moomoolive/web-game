@@ -3,6 +3,12 @@
     <font-awesome-icon v-else class="text-red-500" :icon="['fas', 'times']" />
 </template>
 
+<script lang="ts">
+export default {
+    name: "checkOrTimes"
+}
+</script>
+
 <script setup lang="ts">
 import { defineProps } from 'vue'
 
