@@ -1,7 +1,14 @@
 import * as three from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 
+import { Player } from "./player"
+import { MILLISECONDS_IN_SECOND } from "@/consts"
+
 const HAS_NOT_RENDERED_YET = -1
+
+interface GameOptions {
+    developmentMode: boolean
+}
 
 export class Game {
     #renderer = new three.WebGLRenderer()
@@ -10,10 +17,14 @@ export class Game {
     #paused = true
     #previousFrameTimestamp = HAS_NOT_RENDERED_YET
     #eagerUpdateHook = () => {}
-    #resizeCallback = () => {}
     #addedToDOM = false
+    #player = new Player()
+    #developmentMode = true
+    #sceneMaterials: three.Material[] = []
+    #sceneGeometry: three.BufferGeometry[] = []
 
-    constructor() {
+    constructor(options: GameOptions) {
+        this.#developmentMode = options.developmentMode
         this.#renderer = this.#initRenderer()
         this.#camera = this.#initCamera()
         this.#scene = new three.Scene()
@@ -23,16 +34,38 @@ export class Game {
         controls.update()
         this.#loadWorldAssets()
         this.#basicWorldSetup()
+        this.#addPlayer()
+    }
+
+    async #addPlayer() {
+        try {
+            await this.#player.initialize()
+            this.#scene.add(this.#player.model)
+        } catch(err) {
+            console.error("ASSET_LOADING_ERROR:", err)
+        }
     }
 
     addToDOM() {
         if (this.#addedToDOM) {
             return
         }
+        // sometimes when using hot reload
+        // previous canvas is still attached to dom
+        // and has webGL buffers that haven't been
+        // garbage collected
+        if (this.#developmentMode) {
+            const oldCanvases = document.getElementsByTagName("canvas")
+            for (let i = 0; i < oldCanvases.length; i++) {
+                const canvas = oldCanvases[i]
+                // garabage collect all old 3d model buffers
+                canvas.getContext("webgl")?.getExtension("WEBGL_lose_context")?.loseContext()
+                canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
+                document.removeChild(canvas)
+            }
+        }
         document.body.appendChild(this.#renderer.domElement)
-        const resizeCallback = () => this.#onWindowResize()
-        window.addEventListener("resize", resizeCallback)
-        this.#resizeCallback = resizeCallback
+        window.addEventListener("resize", () => this.#onWindowResize())
         this.#addedToDOM = true
     }
 
@@ -77,51 +110,26 @@ export class Game {
     #loadWorldAssets() {
         const loader = new three.CubeTextureLoader()
         const texture = loader.load([
-            '/world/basic/posx.jpg',
-            '/world/basic/negx.jpg',
-            '/world/basic/posy.jpg',
-            '/world/basic/negy.jpg',
-            '/world/basic/posz.jpg',
-            '/world/basic/negz.jpg',
+            '/game/basic/posx.jpg',
+            '/game/basic/negx.jpg',
+            '/game/basic/posy.jpg',
+            '/game/basic/negy.jpg',
+            '/game/basic/posz.jpg',
+            '/game/basic/negz.jpg',
         ])
         this.#scene.background = texture
     }
 
     #basicWorldSetup() {
-        const plane = new three.Mesh(
-            new three.PlaneBufferGeometry(100, 100, 10, 10),
-            new three.MeshStandardMaterial({ color: 0xFFFFFF })
-        )
+        const geometry = new three.PlaneBufferGeometry(100, 100, 10, 10)
+        const mesh = new three.MeshStandardMaterial({ color: 0xFFFFFF })
+        const plane = new three.Mesh(geometry, mesh)
+        this.#sceneGeometry.push(geometry)
+        this.#sceneMaterials.push(mesh)
         plane.castShadow = false
         plane.receiveShadow = false
         plane.rotation.x = -Math.PI / 2
         this.#scene.add(plane)
-
-        const box = new three.Mesh(
-            new three.BoxBufferGeometry(2, 2, 2),
-            new three.MeshStandardMaterial({ color: 0xFFFFFF })
-        )
-        box.position.set(0, 1, 0)
-        box.castShadow = true
-        box.receiveShadow = true
-        this.#scene.add(box)
-
-        for (let x = -8; x < 8; x++) {
-            for (let y = -8; y < 8; y++) {
-                const box = new three.Mesh(
-                    new three.BoxBufferGeometry(2, 2, 2),
-                    new three.MeshStandardMaterial({ color: 0x808080 })
-                )
-                box.position.set(
-                    Math.random() + x * 5, 
-                    Math.random() * 4.0 + 2.0, 
-                    Math.random() + y * 5
-                )
-                box.castShadow = true
-                box.receiveShadow = true
-                this.#scene.add(box)
-            }
-        }
     }
 
     #onWindowResize() {
@@ -132,26 +140,38 @@ export class Game {
 
     destroy() {
         this.pause()
-        window.removeEventListener("resize", this.#resizeCallback)
+        this.#player.destroy()
+        // currently a memory leak occurs for the "#onWindowResize"
+        // window listener
+        //window.removeEventListener("resize", resizeCallback)
         document.body.removeChild(this.#renderer.domElement)
+        this.#sceneGeometry.map(geometry => geometry.dispose())
+        this.#sceneMaterials.map(material => material.dispose())
+        this.#renderer.dispose()
     }
 
     setEagerUpdateHook(updateCallback: () => void) {
         this.#eagerUpdateHook = updateCallback
     }
 
+    #updateEntities(timeElaspsedMilliseconds: number) {
+        const timeElapsedSeconds = timeElaspsedMilliseconds / MILLISECONDS_IN_SECOND
+        this.#player.update(timeElapsedSeconds)
+    }
+
     #renderLoop() {
         if (this.#paused) {
             return
         }
-        window.requestAnimationFrame(t => {
+        window.requestAnimationFrame(currentTimestamp => {
             if (this.#previousFrameTimestamp === HAS_NOT_RENDERED_YET) {
-                this.#previousFrameTimestamp = t
+                this.#previousFrameTimestamp = currentTimestamp
             }
             this.#renderer.render(this.#scene, this.#camera)
+            this.#updateEntities(currentTimestamp - this.#previousFrameTimestamp)
             this.#eagerUpdateHook()
             this.#renderLoop()
-            this.#previousFrameTimestamp = t
+            this.#previousFrameTimestamp = currentTimestamp
         })
     }
 

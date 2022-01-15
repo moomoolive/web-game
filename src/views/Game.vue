@@ -39,7 +39,7 @@ const { confirm } = useActions()
 
 const showMenu = ref(false)
 const renderCount = ref(0)
-const game = new Game()
+const game = new Game({ developmentMode: true })
 game.addToDOM()
 game.setEagerUpdateHook(() => renderCount.value++)
 
