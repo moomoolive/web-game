@@ -126,14 +126,20 @@ class Controller {
     }
 }
 
+type AnimationStates = "idle" | "walk"
+
 export class Player {
     #model = new three.Group()
     #animationMixer = new three.AnimationMixer(this.#model)
     #controller = new Controller(this.#model)
+    #idleClip: null | three.AnimationClip = null
+    #idleAction: null | three.AnimationAction = null
+    #walkingClip: null | three.AnimationClip = null
+    #walkingAction: null | three.AnimationAction = null
+    #currentAnimation: AnimationStates = "idle"
+    #currentAction: null | three.AnimationAction = null
 
-    constructor() {
-
-    }
+    constructor() {}
 
     async #loadModel(): Promise<void> {
         const loader = new FBXLoader()
@@ -146,10 +152,16 @@ export class Player {
                 this.#model = fbx
                 this.#controller = new Controller(this.#model)
                 const animationLoader = new FBXLoader()
+                this.#animationMixer = new three.AnimationMixer(this.#model)
                 animationLoader.load("/game/player/idle.fbx", animationFbx => {
-                    this.#animationMixer = new three.AnimationMixer(this.#model)
-                    const idle = this.#animationMixer.clipAction(animationFbx.animations[0])
-                    idle.play()
+                    this.#idleClip = animationFbx.animations[0]
+                    this.#idleAction = this.#animationMixer.clipAction(this.#idleClip)
+                    this.#idleAction.play()
+                    resolve()
+                })
+                animationLoader.load("/game/player/walking.fbx", animationFbx => {
+                    this.#walkingClip = animationFbx.animations[0]
+                    this.#walkingAction = this.#animationMixer.clipAction(this.#walkingClip)
                     resolve()
                 })
             }, onProgress, onError)
@@ -172,6 +184,28 @@ export class Player {
     update(timeElapsedSeconds: number) {
         this.#animationMixer.update(timeElapsedSeconds)
         this.#controller.update(timeElapsedSeconds)
+        // absolute garbage code needs to be refactored
+        // but works!
+        if (!this.#walkingAction || !this.#idleAction) {
+            return
+        }
+        if (this.#controller._moveForward && this.#currentAnimation === "idle") {
+            this.#walkingAction.time = 0.0
+            this.#walkingAction.enabled = true
+            this.#walkingAction.setEffectiveTimeScale(1.0)
+            this.#walkingAction.setEffectiveWeight(1.0)
+            this.#walkingAction.crossFadeFrom(this.#idleAction, 0.5, true)
+            this.#walkingAction.play()
+            this.#currentAnimation = "walk"
+        } else if (!this.#controller._moveForward && this.#currentAnimation === "walk") {
+            this.#idleAction.time = 0.0
+            this.#idleAction.enabled = true
+            this.#idleAction.setEffectiveTimeScale(1.0)
+            this.#idleAction.setEffectiveWeight(1.0)
+            this.#idleAction.crossFadeFrom(this.#walkingAction, 0.5, true)
+            this.#idleAction.play()
+            this.#currentAnimation = "idle"
+        }
     }
 
     destroy() {

@@ -59,8 +59,7 @@ export class Game {
             for (let i = 0; i < oldCanvases.length; i++) {
                 const canvas = oldCanvases[i]
                 // garabage collect all old 3d model buffers
-                canvas.getContext("webgl")?.getExtension("WEBGL_lose_context")?.loseContext()
-                canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
+                this.#garbageCollectAllContext(canvas)
                 document.removeChild(canvas)
             }
         }
@@ -147,7 +146,15 @@ export class Game {
         document.body.removeChild(this.#renderer.domElement)
         this.#sceneGeometry.map(geometry => geometry.dispose())
         this.#sceneMaterials.map(material => material.dispose())
+        // do a canvas wide garbage collection, in case something was missed
+        this.#garbageCollectAllContext(this.#renderer.domElement)
         this.#renderer.dispose()
+    }
+
+    // garabage collects all webGL buffers assocaited with canvas
+    #garbageCollectAllContext(canvas: HTMLCanvasElement) {
+        canvas.getContext("webgl")?.getExtension("WEBGL_lose_context")?.loseContext()
+        canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
     }
 
     setEagerUpdateHook(updateCallback: () => void) {
