@@ -14,6 +14,10 @@ import {
     faThumbsUp,
     faExclamationTriangle,
     faCodeBranch,
+    faPlay,
+    faPause,
+    faSnowflake,
+    faVideo,
 } from "@fortawesome/free-solid-svg-icons"
 import { 
     faJs, 
@@ -22,6 +26,10 @@ import {
 } from "@fortawesome/free-brands-svg-icons"
 
 export default [
+    faVideo,
+    faSnowflake,
+    faPause,
+    faPlay,
     faCodeBranch,
     faExclamationTriangle,
     faThumbsUp,

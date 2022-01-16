@@ -12,6 +12,10 @@
     background: rgba(75, 85, 99, 0.8);
 }
 
+.bg-overlay-0\.99 {
+    background: rgba(75, 85, 99, 0.99);
+}
+
 // text colors
 .text-primary-color {
     color: $primary-color;
@@ -28,4 +32,8 @@
 
 .bg-secondary-color {
     background: $secondary-color;
+}
+
+.bg-app-background {
+    background: $app-background;
 }

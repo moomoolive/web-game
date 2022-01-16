@@ -1,5 +1,7 @@
+@import "./variables.scss";
+
 html, body {
-    background: #262626;
+    background: $app-background;
 }
 
 $grey: #404040;

@@ -2,6 +2,23 @@
     <div>
         <v-fade-transition>
             <div 
+                class="fixed w-screen h-screen flex items-center justify-center z-20 bg-app-background"
+                v-show="showOverlay"
+            >
+                <div class="text-center text-2xl">
+                    <h1 class="mb-2">
+                        Loading
+                    </h1>
+
+                    <div class="text-3xl text-primary-color">
+                        <loading-spinner />
+                    </div>
+                </div>
+            </div>
+        </v-fade-transition>
+
+        <v-fade-transition>
+            <div 
                 class="fixed w-screen h-screen flex items-center justify-center z-10 bg-overlay-0.5"
                 v-show="showMenu"
             >
@@ -20,8 +37,28 @@
             </div>
         </v-fade-transition>
 
-        <div class="fixed top-7 left-7 p-2 bg-overlay-0.8">
-            Render Count {{ renderCount }}
+        <div class="fixed top-7 right-7 p-2 bg-overlay-0.8">
+            Render count: {{ renderCount.toLocaleString("en-US") }}
+        </div>
+
+        <div class="fixed bottom-40 left-7">
+            <v-btn icon :color="debugCameraEnabled ? 'success' : 'warning'" @click="toggleDebugCamera()">
+                <font-awesome-icon :icon="['fas', 'video']"/>
+            </v-btn>
+        </div>
+
+
+        <div class="fixed bottom-24 left-7">
+            <v-btn icon :color="frozen ? 'error' : 'info'" @click="freezeUnfreezeGame()">
+                <font-awesome-icon :icon="['fas', 'snowflake']"/>
+            </v-btn>
+        </div>
+
+        <div class="fixed bottom-7 left-7">
+            <v-btn icon :color="paused ? 'surface' : 'success'" @click="toggleGameState()">
+                <font-awesome-icon v-if="paused" :icon="['fas', 'play']"/>
+                <font-awesome-icon v-else :icon="['fas', 'pause']"/>
+            </v-btn>
         </div>
     </div>
 </template>
@@ -29,19 +66,46 @@
 <script lang="ts" setup>
 import { ref, onUnmounted, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import Stats from "stats.js"
 
 import { Game } from '@/libraries/gameEngine/index'
 import { useActions } from '@/store/lib'
-import { sleepSeconds } from '@/libraries/misc'
+import loadingSpinner from '@/components/misc/loadingSpinner.vue'
+import LoadingSpinner from '@/components/misc/loadingSpinner.vue'
+
+// state needs to be managed in one place?
 
 const router = useRouter()
 const { confirm } = useActions()
 
 const showMenu = ref(false)
+const paused = ref(false)
+const frozen = ref(false)
+const showOverlay = ref(true)
 const renderCount = ref(0)
-const game = new Game({ developmentMode: true })
+const debugCameraEnabled = ref(false)
+
+const milliseconds = 3_000
+window.setTimeout(() => showOverlay.value = false, milliseconds)
+
+const FPS_METER = 0
+const performanceMeter = new Stats()
+performanceMeter.showPanel(FPS_METER)
+document.body.appendChild(performanceMeter.dom)
+
+const game = new Game({ developmentMode: true, performanceMeter })
 game.addToDOM()
 game.setEagerUpdateHook(() => renderCount.value++)
+
+function toggleDebugCamera() {
+    if (debugCameraEnabled.value) {
+        debugCameraEnabled.value = false
+        game.disableDebugCamera()
+    } else {
+        debugCameraEnabled.value = true
+        game.enableDebugCamera()
+    }
+}
 
 async function toMainMenu() {
     const consent = await confirm.modal({ 
@@ -55,13 +119,35 @@ async function toMainMenu() {
     router.push("/main-menu")
 }
 
+function freezeUnfreezeGame() {
+    if (frozen.value) {
+        frozen.value = false
+        game.unfreeze()
+    } else {
+        frozen.value = true
+        game.freeze()
+    }
+}
+
+function toggleGameState() {
+    if (paused.value) {
+        paused.value = false
+        game.run()
+    } else {
+        paused.value = true
+        game.pause()
+    }
+}
+
 function toggleMenu() {
     if (!showMenu.value) {
         showMenu.value = true
         game.pause()
     } else {
         showMenu.value = false
-        game.run()
+        if (!paused.value) {
+            game.run()
+        }
     }
 }
 
@@ -75,6 +161,7 @@ window.addEventListener("keyup", onKeyUp)
 onUnmounted(() => {
     window.removeEventListener("keyup", onKeyUp)
     game.destroy()
+    document.body.removeChild(performanceMeter.dom)
 })
 
 onMounted(() => { game.run() })

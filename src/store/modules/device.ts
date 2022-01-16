@@ -3,9 +3,33 @@ import { WebCPU } from 'webcpu'
 
 import { RootState, DeviceSpecsState } from "@/store/types"
 
+const HYPER_THREADING_MULTIPLIER = 2
+
+const ESTIMATED_PHYSICAL_CORES_LOCALSTORAGE_KEY = "estimated-physical-cores"
+const REPORTED_CORES_LOCALSTORAGE_KEY = "reported-cores"
+
+function initializePhysicalCores(): number {
+    const physicalCores = window.localStorage.getItem(ESTIMATED_PHYSICAL_CORES_LOCALSTORAGE_KEY)
+    if (!physicalCores) {
+        // assumption: device is hyperthreaded
+        return Math.round(navigator.hardwareConcurrency / HYPER_THREADING_MULTIPLIER)
+    } else {
+        return parseInt(physicalCores)
+    }
+}
+
+function initalizeTotalCores(): number {
+    const totalCores = window.localStorage.getItem(REPORTED_CORES_LOCALSTORAGE_KEY)
+    if (!totalCores) {
+        return navigator.hardwareConcurrency
+    } else {
+        return parseInt(totalCores)
+    }
+}
+
 const state: DeviceSpecsState = {
-    estimatedPhysicalCores: 1,
-    totalCores: 2
+    estimatedPhysicalCores: initializePhysicalCores(),
+    totalCores: initalizeTotalCores()
 }
 
 enum Mutations {
@@ -31,12 +55,14 @@ export interface DeviceSpecsActions {
 const actions: ActionTree<DeviceSpecsState, RootState> = {
     async getCPUSpecs({ commit }) {
         try {
-            const { estimatedPhysicalCores } = await WebCPU.detectCPU()
+            const { estimatedPhysicalCores, reportedCores } = await WebCPU.detectCPU()
             const payload: CPUSpecs = {
                 physicalCores: estimatedPhysicalCores,
-                totalCores: navigator.hardwareConcurrency
+                totalCores: reportedCores || estimatedPhysicalCores * HYPER_THREADING_MULTIPLIER
             }
             commit(Mutations.UPDATE_CPU_SPECS, payload)
+            window.localStorage.setItem(ESTIMATED_PHYSICAL_CORES_LOCALSTORAGE_KEY, JSON.stringify(estimatedPhysicalCores))
+            window.localStorage.setItem(REPORTED_CORES_LOCALSTORAGE_KEY, JSON.stringify(reportedCores))
         } catch {
             console.warn("an error occured when estimating cpu specs")
         }

@@ -137,7 +137,6 @@ export class Player {
     #walkingClip: null | three.AnimationClip = null
     #walkingAction: null | three.AnimationAction = null
     #currentAnimation: AnimationStates = "idle"
-    #currentAction: null | three.AnimationAction = null
 
     constructor() {}
 
