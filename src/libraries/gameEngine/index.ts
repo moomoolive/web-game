@@ -1,6 +1,7 @@
 import * as three from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 import Stats from "stats.js"
+import { Ref, ref } from "vue"
 
 import { Player } from "./player"
 import { MILLISECONDS_IN_SECOND } from "@/consts"
@@ -9,30 +10,53 @@ import { ThirdPersonCamera } from "./camera"
 const HAS_NOT_RENDERED_YET = -1
 
 interface GameOptions {
-    developmentMode: boolean,
+    developmentMode: boolean
     performanceMeter: Stats
+}
+
+type VueRef<T> = Readonly<Ref<T>>
+
+interface UIReferences {
+    paused: VueRef<boolean>
+    showMenu: VueRef<boolean>
+    frozen: VueRef<boolean>
+    debugCameraEnabled: VueRef<boolean>
+    renderCount: VueRef<number>
 }
 
 export class Game {
     #renderer = new three.WebGLRenderer()
     #camera = new three.PerspectiveCamera()
     #scene = new three.Scene()
-    #paused = true
-    #frozen = false
     #previousFrameTimestamp = HAS_NOT_RENDERED_YET
-    #eagerUpdateHook = () => {}
     #addedToDOM = false
     #player = new Player()
-    #developmentMode = true
+    
+    // garabage collection
     #sceneMaterials: three.Material[] = []
     #sceneGeometry: three.BufferGeometry[] = []
+    
+    // game flags
+    #developmentMode = true
+
+    // debug tools
     #debugCamera = new OrbitControls(this.#camera, this.#renderer.domElement)
+    #debugCameraEnabled = ref(false)
+    #paused = ref(false)
+    #frozen = ref(false)
+    #renderCount = ref(0)
+
+    // ui elements
+    #showMenu = ref(false)
+
+    // uninitialized
     #thirdPersonCamera: ThirdPersonCamera
     #performanceMeter: Stats
 
     constructor(options: GameOptions) {
         this.#developmentMode = options.developmentMode
         this.#performanceMeter = options.performanceMeter
+
         this.#renderer = this.#initRenderer()
         this.#camera = this.#initCamera()
         this.#scene = new three.Scene()
@@ -42,6 +66,16 @@ export class Game {
         this.#loadWorldAssets()
         this.#basicWorldSetup()
         this.#addPlayer()
+    }
+
+    get vueRefs(): UIReferences {
+        return {
+            paused: this.#paused,
+            showMenu: this.#showMenu,
+            frozen: this.#frozen,
+            debugCameraEnabled: this.#debugCameraEnabled,
+            renderCount: this.#renderCount
+        }
     }
 
     async #addPlayer() {
@@ -155,7 +189,7 @@ export class Game {
     }
 
     destroy() {
-        this.pause()
+        this.#freeze()
         this.#player.destroy()
         // currently a memory leak occurs for the "#onWindowResize"
         // window listener
@@ -165,6 +199,7 @@ export class Game {
         this.#sceneMaterials.map(material => material.dispose())
         // do a canvas wide garbage collection, in case something was missed
         this.#garbageCollectAllContext(this.#renderer.domElement)
+        this.#debugCamera.dispose()
         this.#renderer.dispose()
     }
 
@@ -174,33 +209,31 @@ export class Game {
         canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
     }
 
-    setEagerUpdateHook(updateCallback: () => void) {
-        this.#eagerUpdateHook = updateCallback
-    }
-
     #updateEntities(timeElaspsedMilliseconds: number) {
         const timeElapsedSeconds = timeElaspsedMilliseconds / MILLISECONDS_IN_SECOND
         this.#player.update(timeElapsedSeconds)
     }
 
     #renderLoop() {
-        if (this.#frozen) {
+        if (this.#frozen.value) {
             return
         }
         window.requestAnimationFrame(currentTimestamp => {
-            this.#performanceMeter.begin()
+            if (!this.#paused.value) {
+                this.#performanceMeter.begin()
+            }
             if (this.#previousFrameTimestamp === HAS_NOT_RENDERED_YET) {
                 this.#previousFrameTimestamp = currentTimestamp
             }
             this.#renderer.render(this.#scene, this.#camera)
-            if (this.#paused) {
+            if (this.#paused.value) {
                 return this.#renderLoop()
             }
             const timeElaspsedMilliseconds = currentTimestamp - this.#previousFrameTimestamp
             this.#updateEntities(timeElaspsedMilliseconds)
             this.#thirdPersonCamera.update(timeElaspsedMilliseconds)
-            this.#eagerUpdateHook()
             this.#previousFrameTimestamp = currentTimestamp
+            this.#renderCount.value++
             this.#performanceMeter.end()
             this.#renderLoop()
         })
@@ -208,40 +241,69 @@ export class Game {
 
     enableDebugCamera() {
         this.#thirdPersonCamera.enabled = false
+
+
+        const { x, y, z } = this.#thirdPersonCamera.lookAt
+        this.#debugCamera.target.set(x, y, z)
+        this.#debugCamera.update()
+        // how can I merge these two into one state?
         this.#debugCamera.enabled = true
+        this.#debugCameraEnabled.value = true
     }
 
     disableDebugCamera() {
         this.#debugCamera.enabled = false
+        this.#debugCameraEnabled.value = false
+
+        this.#thirdPersonCamera.reposition()
         this.#thirdPersonCamera.enabled = true
+    }
+
+    toggleDebugCamera() {
+        if (this.#debugCamera.enabled) {
+            this.disableDebugCamera()
+        } else {
+            this.enableDebugCamera()
+        }
     }
 
     // this method doesn't allow anything in the game to render
     // even the camera; If you only want to freeze game entities
     // use .pause()
-    freeze() {
-        this.#frozen = true
+    #freeze() {
+        this.#frozen.value = true
         this.disableDebugCamera()
     }
 
-    unfreeze() {
+    #unfreeze() {
         if (!this.#frozen) {
             return
         }
-        this.#frozen = false
+        this.#frozen.value = false
         this.enableDebugCamera()
         this.#renderLoop()
     }
 
-    pause() {
-        this.#paused = true
+    toggleFreeze() {
+        if (this.#frozen.value) {
+            this.#unfreeze()
+        } else {
+            this.#freeze()
+        }
+    }
+
+    togglePause() {
+        this.#paused.value = !this.#paused.value
+    }
+
+    toggleMenu() {
+        this.#showMenu.value = !this.#showMenu.value
     }
 
     run() {
-        if (!this.#paused) {
+        if (this.#paused.value) {
             return
         }
-        this.#paused = false
         this.#renderLoop()
     }
 }

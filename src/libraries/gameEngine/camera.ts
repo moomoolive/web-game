@@ -12,6 +12,19 @@ export class ThirdPersonCamera {
         this.#playerModel = playerModel
     }
 
+    get position(): Readonly<three.Vector3> {
+        return this.#currentPosition
+    }
+
+    get lookAt(): Readonly<three.Vector3> {
+        return this.#currentLookAt
+    }
+
+    reposition() {
+        this.#camera.position.copy(this.#currentPosition)
+        this.#camera.lookAt(this.#currentLookAt)
+    }
+
     #calculateIdealOffset() {
         const idealOffset = new three.Vector3(-15, 20, -30)
         idealOffset.applyQuaternion(this.#playerModel.quaternion)
