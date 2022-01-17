@@ -32,7 +32,10 @@
                             class="mb-4" 
                             @click="toMainMenu()"
                         >
-                            <font-awesome-icon class="mr-2 text-secondary-color" :icon="['fas', 'bars']"/>
+                            <font-awesome-icon 
+                                class="mr-2 text-secondary-color" 
+                                :icon="faBars"
+                            />
                             Main Menu
                         </v-btn>
 
@@ -54,34 +57,24 @@
             Render count: {{ renderCount.toLocaleString("en-US") }}
         </div>
 
-        <div class="fixed bottom-40 left-7">
+        <div class="fixed bottom-24 left-7">
             <v-btn 
                 icon 
                 :color="debugCameraEnabled ? 'success' : 'warning'" 
                 @click="game.toggleDebugCamera()"
             >
-                <font-awesome-icon :icon="['fas', 'video']"/>
-            </v-btn>
-        </div>
-
-        <div class="fixed bottom-24 left-7">
-            <v-btn 
-                icon 
-                :color="frozen ? 'error' : 'info'" 
-                @click="game.toggleFreeze()"
-            >
-                <font-awesome-icon :icon="['fas', 'snowflake']"/>
+                <font-awesome-icon :icon="faVideo"/>
             </v-btn>
         </div>
 
         <div class="fixed bottom-7 left-7">
             <v-btn 
                 icon 
-                :color="paused ? 'surface' : 'success'" 
+                :color="!paused ? 'surface' : 'success'" 
                 @click="game.togglePause()"
             >
-                <font-awesome-icon v-if="paused" :icon="['fas', 'play']"/>
-                <font-awesome-icon v-else :icon="['fas', 'pause']"/>
+                <font-awesome-icon v-if="!paused" :icon="faPause"/>
+                <font-awesome-icon v-else :icon="faPlay"/>
             </v-btn>
         </div>
     </div>
@@ -91,6 +84,9 @@
 import { ref, onUnmounted, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Stats from "stats.js"
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { faPause, faPlay, faVideo, faBars } from '@fortawesome/free-solid-svg-icons'
+import { VBtn, VCard, VFadeTransition } from 'vuetify'
 
 import { Game } from '@/libraries/gameEngine/index'
 import { useActions } from '@/store/lib'

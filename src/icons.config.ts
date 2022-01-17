@@ -18,6 +18,8 @@ import {
     faPause,
     faSnowflake,
     faVideo,
+    faUpload,
+    faUserFriends,
 } from "@fortawesome/free-solid-svg-icons"
 import { 
     faJs, 
@@ -26,6 +28,8 @@ import {
 } from "@fortawesome/free-brands-svg-icons"
 
 export default [
+    faUserFriends,
+    faUpload,
     faVideo,
     faSnowflake,
     faPause,

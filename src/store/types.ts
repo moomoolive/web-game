@@ -1,3 +1,5 @@
+import { DeviceType } from "@/libraries/misc"
+
 export interface ConfirmState {
     header: string,
     body: string,
@@ -8,6 +10,7 @@ export interface ConfirmState {
 export interface DeviceSpecsState {
     estimatedPhysicalCores: number
     totalCores: number
+    type: DeviceType
 }
 
 export interface RootState {

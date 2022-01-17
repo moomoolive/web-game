@@ -7,15 +7,24 @@
             [
             </span>
             <span class="text-yellow-500">
-                <font-awesome-icon class="animate-bounce" :icon="['fab', 'js']"/>
+                <font-awesome-icon 
+                    class="animate-bounce" 
+                    :icon="faJs"
+                />
             </span>
             ,
             <span class="text-blue-500 ml-2">
-                <font-awesome-icon class="animate-bounce" :icon="['fab', 'css3']"/>
+                <font-awesome-icon 
+                    class="animate-bounce" 
+                    :icon="faCss3"
+                />
             </span>
             ,
             <span class="text-red-500 ml-2">
-                <font-awesome-icon class="animate-bounce" :icon="['fab', 'html5']"/>
+                <font-awesome-icon 
+                    class="animate-bounce" 
+                    :icon="faHtml5"
+                />
             </span>
             ]
         </div>
@@ -26,6 +35,8 @@
 <script setup lang="ts">
 import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { faJs, faCss3, faHtml5 } from "@fortawesome/free-brands-svg-icons"
 
 import { DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY } from './DeviceCompatiblity.vue'
 

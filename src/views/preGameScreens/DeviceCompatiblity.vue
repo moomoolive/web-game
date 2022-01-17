@@ -11,7 +11,7 @@
             <div v-else>
                 <div v-if="deviceIsCompatible">
                     <span class="mr-2 text-green-500">
-                        <font-awesome-icon :icon="['fas', 'thumbs-up']" />
+                        <font-awesome-icon :icon="faThumbsUp" />
                     </span>
                     You're good to go
                 </div>
@@ -19,7 +19,9 @@
                 <div v-else>
                     <div>
                         <span class="mr-2 text-yellow-500">
-                            <font-awesome-icon :icon="['fas', 'exclamation-triangle']" />
+                            <font-awesome-icon 
+                                :icon="faExclamationTriangle" 
+                            />
                         </span>
                         <span class="text-yellow-500">
                             Your device is incompatible
@@ -70,6 +72,9 @@ export const DEVICE_IS_COMPATIBLE_LOCALSTORAGE_KEY = "device-is-compatible"
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ref } from 'vue'
+import { VFadeTransition } from 'vuetify'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { faThumbsUp, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons'
 
 import loadingSpinner from '@/components/misc/loadingSpinner.vue'
 import { 

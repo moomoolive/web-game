@@ -3,7 +3,7 @@
     router transition taken from:
     https://learnvue.co/2021/01/4-awesome-examples-of-vue-router-transitions/#-1-fade-vue-router-transitions
   -->
-  <router-view v-slot="{ Component }" class="text-gray-100 z-10">
+  <router-view v-slot="{ Component }" class="text-gray-100 z-0">
     <transition name="fade" mode="out-in">
       <component :is="Component" />
     </transition>
@@ -58,6 +58,16 @@
 
 <script setup lang="ts">
 import { useActions } from '@/store/lib'
+import { 
+  VCard, 
+  VCardActions, 
+  VBtn, 
+  VFadeTransition, 
+  VCardText, 
+  VCardTitle,
+  VSpacer,
+  VDivider
+} from 'vuetify'
 
 const { confirm } = useActions()
 </script>

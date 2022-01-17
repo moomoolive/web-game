@@ -3,7 +3,7 @@
     
     <div>
         <span class="text-primary-color mr-2">
-          <font-awesome-icon class="animate-spin" :icon="['fas', 'gamepad']"/>
+          <font-awesome-icon class="animate-spin" :icon="faGamepad"/>
         </span>
         Web Games
     </div>
@@ -14,6 +14,8 @@
 <script setup lang="ts">
 import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome"
+import { faGamepad } from '@fortawesome/free-solid-svg-icons'
 
 const router = useRouter()
 const milliseconds = 2_000

@@ -1,7 +1,9 @@
 import { ActionTree, Module, MutationTree } from "vuex"
 import { WebCPU } from 'webcpu'
 
+import { DeviceType } from "@/libraries/misc"
 import { RootState, DeviceSpecsState } from "@/store/types"
+import { detectDeviceType } from "@/libraries/misc"
 
 const HYPER_THREADING_MULTIPLIER = 2
 
@@ -27,9 +29,14 @@ function initalizeTotalCores(): number {
     }
 }
 
+function currentDeviceType(): DeviceType {
+    return detectDeviceType(navigator.userAgent)
+}
+
 const state: DeviceSpecsState = {
     estimatedPhysicalCores: initializePhysicalCores(),
-    totalCores: initalizeTotalCores()
+    totalCores: initalizeTotalCores(),
+    type: currentDeviceType()
 }
 
 enum Mutations {

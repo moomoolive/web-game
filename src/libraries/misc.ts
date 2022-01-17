@@ -43,3 +43,20 @@ export async function sleepSeconds(seconds: number): Promise<boolean> {
         window.setTimeout(() => resolve(true), seconds * MILLISECONDS_IN_SECOND)
     })
 }
+export type DeviceType = "mobile" | "desktop" | "console" | "tablet"
+// inspiration taken from:
+// https://attacomsian.com/blog/javascript-detect-mobile-device
+// this is a very naiive implementation; but it's light weight and 
+// good enough
+export function detectDeviceType(userAgent: string): DeviceType {
+    if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(userAgent)) {
+        return "tablet"
+    }
+    else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent)) {
+        return "mobile"
+    }
+    else if (/(xbox|playstation|nintendo)/i.test(userAgent)) {
+        return "console"
+    }
+    return "desktop"
+}
