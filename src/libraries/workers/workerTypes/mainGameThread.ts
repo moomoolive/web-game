@@ -29,6 +29,11 @@ const FUNCTION_LOOKUP: Readonly<MainThreadFunctionLookup> = {
     [mainThreadCodes.KEY_UP]: function(data) {
         sendToRenderingThread(renderingThreadCodes.KEY_UP_RESPONSE, data)
         return data
+    },
+    [mainThreadCodes.ACKNOWLEDGE_HELPER_PING](data) {
+        const [workerId] = data
+        console.log("worker", workerId, "ping acknowledged")
+        return data
     }
 }
 
