@@ -2,8 +2,8 @@
 // by the vite-plugin-worker
 // typescript definitions for these modules made possible by tsconfig.json
 // module alias section
-import mainGameThreadConstructor from "worker:@/libraries/workers/mainGameThread"
-import { MainThreadMessage, RenderingThreadMessage, } from "./types"
+import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
+import { MainThreadMessage, RenderingThreadMessage, } from "@/libraries/workers/types"
 import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { emptyPayload } from "@/libraries/workers/common/index"
 

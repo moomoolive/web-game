@@ -1,5 +1,5 @@
-import { MainThreadMessage as Data, ThreadExecutor } from "./types"
-import { mainThreadCodes } from "./messageCodes/mainThread"
+import { MainThreadMessage as Data, ThreadExecutor } from "@/libraries/workers/types"
+import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 
 type MainThreadFunctionLookup = {
