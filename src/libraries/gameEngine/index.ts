@@ -10,6 +10,7 @@ import { MainGameThread } from "@/libraries/workers/workerTypes/index"
 import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 import { ThreadExecutor } from "@/libraries/workers/types"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
+import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 
 const HAS_NOT_RENDERED_YET = -1
 
@@ -21,17 +22,17 @@ let player = new Player()
 let keyDownHandler = (event: KeyboardEvent) => {}
 let keyUpHandler = (event: KeyboardEvent) => {}
 const FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
-    [renderingThreadCodes.RETURN_PING]: function(data: Float64Array) {
+    returnPing(data: Float64Array) {
         const [unixTimestamp] = data
-        console.log("main thread ping acknowledged")
+        console.log(renderingThreadIdentity(), "main thread ping acknowledged @", unixTimestamp)
         return data
     },
-    [renderingThreadCodes.KEY_DOWN_RESPONSE]: function(data: Float64Array) {
+    keyDownResponse(data: Float64Array) {
         const [keyCode] = data
         player.onKeyDown(keyCode)
         return data
     },
-    [renderingThreadCodes.KEY_UP_RESPONSE]: function(data: Float64Array) {
+    keyUpResponse(data: Float64Array) {
         const [keyCode] = data
         player.onKeyUp(keyCode)
         return data
@@ -78,8 +79,11 @@ export class Game {
     #performanceMeter: Stats
 
     constructor(options: GameOptions) {
+        this.mainThread.setFatalErrorHandler(err => {
+            console.error(renderingThreadIdentity(), "fatal error occurred on main thread, error:", err)
+        })
+        
         this.#performanceMeter = options.performanceMeter
-
         this.#renderer = this.#initRenderer()
         this.#camera = this.#initCamera()
         this.#scene = new three.Scene()
@@ -90,8 +94,13 @@ export class Game {
         this.#basicWorldSetup()
         this.#addPlayer()
         this.mainThread.onmessage = message => {
-            const { code, payload } = message.data
-            FUNCTION_LOOKUP[code](payload)
+            try {
+                const { handler, payload } = message.data
+                FUNCTION_LOOKUP[handler](payload)
+            } catch(err) {
+                console.warn(renderingThreadIdentity(), "something went wrong when looking up function, payload", message.data)
+                console.error("error:", err)
+            }
         }
     }
 

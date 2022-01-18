@@ -8,64 +8,98 @@ import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { emptyPayload } from "@/libraries/workers/common/index"
 import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 import helperGameThreadConstructor from "worker:@/libraries/workers/workerTypes/helperGameThread"
+import { renderingThreadIdentity, mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 
 export interface Thread {
     onmessage: Function
     postMessage: Function
     ping: () => void
     terminate: () => void
+    setFatalErrorHandler: (handler: (err: ErrorEvent) => void) => void
 }
 
 export class MainGameThread implements Thread {
-    #worker = mainGameThreadConstructor()
+    private worker = mainGameThreadConstructor()
 
-    constructor() {}
+    constructor() {
+        this.worker.onerror = (err: ErrorEvent) => {
+            console.error(renderingThreadIdentity(), " fatal error occurred on main thread, error:", err)
+        }
 
-    postMessage(code: mainThreadCodes, payload: Float64Array) {
-        const message: MainThreadMessage = { code, payload }
+        this.worker.onmessageerror = err => {
+            console.error(
+                renderingThreadIdentity(),
+                "error occur when recieving message from main thread, error:", 
+                err
+            )
+        }
+    }
+
+    setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
+        this.worker.onerror = handler
+    }
+
+    postMessage(handler: mainThreadCodes, payload: Float64Array) {
+        const message: MainThreadMessage = { handler, payload }
         // pass payload by reference
-        this.#worker.postMessage(message, [payload.buffer])
-        this.#worker.onerror = err => console.error(err)
-        this.#worker.onmessageerror = err => console.error(err)
+        this.worker.postMessage(message, [payload.buffer])
     }
 
     set onmessage(handler: (message: MessageEvent<RenderingThreadMessage>) => void) {
-        this.#worker.onmessage = handler 
+        this.worker.onmessage = handler 
     }
 
     ping() {
-        this.postMessage(mainThreadCodes.PING, emptyPayload())
+        this.postMessage("ping", emptyPayload())
     }
 
     notifyKeyDown(event: KeyboardEvent) {
-        this.postMessage(mainThreadCodes.KEY_DOWN, new Float64Array([event.keyCode]))
+        this.postMessage("keyDown", new Float64Array([event.keyCode]))
     }
 
     notifyKeyUp(event: KeyboardEvent) {
-        this.postMessage(mainThreadCodes.KEY_UP, new Float64Array([event.keyCode]))
+        this.postMessage("keyUp", new Float64Array([event.keyCode]))
     }
 
     terminate() {
-        this.#worker.terminate()
+        this.worker.terminate()
     }
 }
 
-
 export class HelperGameThread implements Thread {
-    #worker = helperGameThreadConstructor()
+    private worker = helperGameThreadConstructor()
     busy = false
+
     id: Readonly<number>
+    errorHandler: (message: MessageEvent<MainThreadMessage>) => void
     
     constructor(id: number) {
         this.id = id
-        this.#worker.onerror = err => console.error("worker", this.id, "exception", err)
-        this.#worker.onmessageerror = err => console.error(err)
+
+        this.errorHandler = (message: MessageEvent<MainThreadMessage>) => {
+            console.error(
+                mainThreadIdentity(),
+                "error occur when recieving message from worker", 
+                this.id, 
+                ", message:", 
+                message
+            )
+        }
+        this.worker.onmessageerror = this.errorHandler
+
+        this.worker.onerror = err => {
+            console.error(mainThreadIdentity(), "fatal error occurred on worker", this.id, ", err:", err)
+        }
+    }
+
+    setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
+        this.worker.onerror = handler
     }
     
-    postMessage(code: helperGameThreadCodes, payload: Float64Array) {
-        const message: HelperGameThreadMessage = { code, payload }
+    postMessage(handler: helperGameThreadCodes, payload: Float64Array) {
+        const message: HelperGameThreadMessage = { handler, payload }
         // pass payload by reference
-        this.#worker.postMessage(message, [payload.buffer])
+        this.worker.postMessage(message, [payload.buffer])
     }
     
     async postMessagePromise(code: helperGameThreadCodes, payload: Float64Array): Promise<void> {
@@ -73,22 +107,25 @@ export class HelperGameThread implements Thread {
             this.onmessage = message => {
                 console.log(message)
                 resolve()
+                this.worker.onmessageerror = this.errorHandler
             }
-            this.#worker.onmessageerror = messageError => reject()
-            this.#worker.onerror = error => reject()
+            this.worker.onmessageerror = (message: MessageEvent<MainThreadMessage>) => {
+                this.errorHandler(message)
+                reject()
+            }
             this.postMessage(code, payload)
         })
     }
     
     set onmessage(handler: (message: MessageEvent<MainThreadMessage>) => void) {
-        this.#worker.onmessage = handler 
+        this.worker.onmessage = handler 
     }
     
     ping() {
-        this.postMessage(helperGameThreadCodes.PING, new Float64Array([this.id]))  
+        this.postMessage("ping", new Float64Array([this.id]))  
     }
 
     terminate() {
-        this.#worker.terminate()
+        this.worker.terminate()
     }
 }

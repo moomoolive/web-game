@@ -6,7 +6,7 @@ import { helperGameThreadCodes } from "./messageCodes/helperGameThread"
 export type WebWorkerConstructor = typeof mainGameThreadConstructor
 
 interface ThreadCommunication<TARGET_THREAD_CODES> {
-    code: TARGET_THREAD_CODES,
+    handler: TARGET_THREAD_CODES,
     payload: Float64Array
 }
 
