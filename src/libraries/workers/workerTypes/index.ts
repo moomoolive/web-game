@@ -13,7 +13,7 @@ import { renderingThreadIdentity, mainThreadIdentity } from "@/libraries/workers
 export interface Thread {
     onmessage: Function
     postMessage: Function
-    ping: () => void
+    ping: () => void | Promise<void>
     terminate: () => void
     setFatalErrorHandler: (handler: (err: ErrorEvent) => void) => void
 }
@@ -49,8 +49,31 @@ export class MainGameThread implements Thread {
         this.worker.onmessage = handler 
     }
 
-    ping() {
-        this.postMessage("ping", emptyPayload())
+    async ping(): Promise<void> {
+        if (!this.worker.onmessage) {
+            return Promise.reject()
+        }
+        const previousOnMessage = this.worker.onmessage
+        const previousOnMessageError = this.worker.onmessageerror
+        return new Promise((resolve, reject) => {
+            this.worker.onmessage = (message: MessageEvent<RenderingThreadMessage>) => {
+                this.worker.onmessage = previousOnMessage
+                this.worker.onmessage(message)
+                this.worker.onmessageerror = previousOnMessageError
+                resolve()
+            }
+            this.worker.onmessageerror = () => {
+                console.warn(renderingThreadIdentity(), "FATAL, main thread did not return ping")
+                reject()
+                this.worker.onmessage = previousOnMessage
+                this.worker.onmessageerror = previousOnMessageError
+            }
+            const message: MainThreadMessage = {
+                handler: "ping",
+                payload: emptyPayload()
+            }
+            this.worker.postMessage(message, [message.payload.buffer])
+        })
     }
 
     notifyKeyDown(event: KeyboardEvent) {

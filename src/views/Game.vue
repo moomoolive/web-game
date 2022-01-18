@@ -88,7 +88,7 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import { faPause, faPlay, faVideo, faBars } from '@fortawesome/free-solid-svg-icons'
 import { VBtn, VCard, VFadeTransition } from 'vuetify'
 
-import { Game } from '@/libraries/gameEngine/index'
+import { createGame } from '@/libraries/gameEngine/index'
 import { useActions } from '@/store/lib'
 import loadingSpinner from '@/components/misc/loadingSpinner.vue'
 
@@ -99,7 +99,7 @@ const FPS_METER = 0
 const performanceMeter = new Stats()
 performanceMeter.showPanel(FPS_METER)
 
-const game = new Game({ 
+const game = createGame({ 
     developmentMode: true, 
     performanceMeter,
 })
@@ -107,12 +107,7 @@ document.body.appendChild(game.domElement())
 
 // these are readonly; change can only be made from
 // inside "game"
-const { 
-    paused, 
-    showMenu, 
-    debugCameraEnabled, 
-    renderCount 
-} = game.vueRefs
+const { paused, showMenu, debugCameraEnabled, renderCount } = game.vueRefs()
 
 const showOverlay = ref(true)
 
@@ -141,16 +136,22 @@ window.addEventListener("keyup", onKeyUp)
 onUnmounted(() => {
     window.removeEventListener("keyup", onKeyUp)
     game.destroy()
+    document.body.removeChild(game.domElement())
     document.body.removeChild(performanceMeter.dom)
 })
  
-onMounted(() => { 
-    window.setTimeout(() => {
-        document.body.appendChild(performanceMeter.dom)
-        game.initialize()
-        document.body.appendChild(game.domElement())
-        game.run() 
-    }, 2_000)
+onMounted(async () => {
+    try {
+        await game.initialize() 
+        const milliseconds = 2_000
+        window.setTimeout(() => {
+            document.body.appendChild(game.domElement())
+            document.body.appendChild(performanceMeter.dom)
+            game.run() 
+        }, milliseconds)       
+    } catch(err) {
+        console.error("game mounting error", err)
+    }
 })
 </script>
 
