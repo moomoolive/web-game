@@ -1,0 +1,4 @@
+export enum RENDERING_THREAD_CODES {
+    RETURN_HELLO = 10_000,
+    UNKNOWN = 10_001
+}

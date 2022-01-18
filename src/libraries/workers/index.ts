@@ -1,20 +1,24 @@
-import createWorker from "worker:@/libraries/workers/main"
-import { WorkerPayload } from "./types"
+// the "worker:" module alias is resolved
+// by the vite-plugin-worker
+// typescript definitions for these modules made possible by tsconfig.json
+// module alias section
+import mainGameThreadConstructor from "worker:@/libraries/workers/mainGameThread"
+import { MainThreadMessage, RenderingThreadMessage, } from "./types"
+import { MAIN_THREAD_CODES } from "@/libraries/workers/messageCodes/mainThread"
 
-export class WebWorker {
-    #worker: Worker
-    
-    constructor() {
-        const worker = createWorker() as unknown as Worker
-        this.#worker = worker
+export class MainGameThread {
+    #worker = mainGameThreadConstructor()
+
+    constructor() {}
+
+    postMessage(code: MAIN_THREAD_CODES, payload: Float64Array) {
+        // pass payload by reference
+        const message: MainThreadMessage = { code, payload }
+        this.#worker.postMessage(message, [payload.buffer])
     }
 
-    postMessage(message: WorkerPayload) {
-        this.#worker.postMessage(message)
-    }
-
-    set onmessage(handler: (message: MessageEvent<WorkerPayload>) => void) {
-        this.#worker.onmessage = handler
+    set onmessage(handler: (message: MessageEvent<RenderingThreadMessage>) => void) {
+        this.#worker.onmessage = handler 
     }
 
     terminate() {

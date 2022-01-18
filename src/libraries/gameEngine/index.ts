@@ -6,8 +6,16 @@ import { Ref, ref } from "vue"
 import { Player } from "./player"
 import { MILLISECONDS_IN_SECOND } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
+import { MainGameThread } from "@/libraries/workers/index"
+import { MAIN_THREAD_CODES } from "@/libraries/workers/messageCodes/mainThread"
+import { RENDERING_THREAD_CODES } from "@/libraries/workers/messageCodes/renderingThread"
+import { ThreadExecutor } from "@/libraries/workers/types"
 
 const HAS_NOT_RENDERED_YET = -1
+
+type RenderingThreadFunctionLookup = {
+    [key in RENDERING_THREAD_CODES]: ThreadExecutor
+}
 
 interface GameOptions {
     developmentMode: boolean
@@ -31,6 +39,7 @@ export class Game {
     #previousFrameTimestamp = HAS_NOT_RENDERED_YET
     #addedToDOM = false
     #player = new Player()
+    #mainThread = new MainGameThread()
     
     // garabage collection
     #sceneMaterials: three.Material[] = []
@@ -52,6 +61,7 @@ export class Game {
     // uninitialized
     #thirdPersonCamera: ThirdPersonCamera
     #performanceMeter: Stats
+    #FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup>
 
     constructor(options: GameOptions) {
         this.#developmentMode = options.developmentMode
@@ -66,6 +76,21 @@ export class Game {
         this.#loadWorldAssets()
         this.#basicWorldSetup()
         this.#addPlayer()
+        
+        this.#FUNCTION_LOOKUP = {
+            [RENDERING_THREAD_CODES.RETURN_HELLO]: function(data: Float64Array) {
+                console.log("hello returned from main thread @", new Date())
+                return data
+            },
+            [RENDERING_THREAD_CODES.UNKNOWN]: function(data: Float64Array) {
+                return data
+            }
+        }
+
+        this.#mainThread.onmessage = message => {
+            const { code, payload } = message.data
+            this.#FUNCTION_LOOKUP[code](payload)
+        }
     }
 
     get vueRefs(): UIReferences {
@@ -81,6 +106,7 @@ export class Game {
     async #addPlayer() {
         try {
             await this.#player.initialize()
+            this.#mainThread.postMessage(MAIN_THREAD_CODES.HELLO, new Float64Array(2).fill(2))
             this.#scene.add(this.#player.model)
             this.#thirdPersonCamera = new ThirdPersonCamera(this.#camera, this.#player.model)
         } catch(err) {
@@ -201,6 +227,7 @@ export class Game {
         this.#garbageCollectAllContext(this.#renderer.domElement)
         this.#debugCamera.dispose()
         this.#renderer.dispose()
+        this.#mainThread.terminate()
     }
 
     // garabage collects all webGL buffers assocaited with canvas

@@ -12,7 +12,8 @@
     "types": ["vuetify", "@intlify/vite-plugin-vue-i18n/client", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "worker:@/libraries/workers/mainGameThread": ["./src/libraries/workers/mainGameThread"],
     },
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
