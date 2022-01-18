@@ -23,7 +23,7 @@ let keyUpHandler = (event: KeyboardEvent) => {}
 const FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
     [renderingThreadCodes.RETURN_PING]: function(data: Float64Array) {
         const [unixTimestamp] = data
-        console.log("main thread returned ping, recieved @", unixTimestamp)
+        console.log("main thread ping acknowledged @", unixTimestamp)
         return data
     },
     [renderingThreadCodes.KEY_DOWN_RESPONSE]: function(data: Float64Array) {
@@ -107,7 +107,7 @@ export class Game {
     async #addPlayer() {
         try {
             await player.initialize()
-            this.mainThread.ping()
+            //this.mainThread.ping()
             this.#scene.add(player.model)
             this.#thirdPersonCamera = new ThirdPersonCamera(this.#camera, player.model)
         } catch(err) {

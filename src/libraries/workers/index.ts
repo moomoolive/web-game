@@ -2,22 +2,36 @@
 // by the vite-plugin-worker
 // typescript definitions for these modules made possible by tsconfig.json
 // module alias section
-import mainGameThreadConstructor from "worker:@/libraries/workers/mainGameThread"
-import { MainThreadMessage, RenderingThreadMessage, } from "./types"
+import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
+import { 
+    MainThreadMessage, 
+    RenderingThreadMessage, 
+    HelperGameThreadMessage
+} from "./types"
 import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { emptyPayload } from "@/libraries/workers/common/index"
+//import helperGameThreadConstructor from "worker:@/libraries/workers/workerTypes/helperGameThread"
+import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 
-export class MainGameThread {
+export interface Thread {
+    onmessage: Function
+    postMessage: Function
+    ping: () => void
+    terminate: () => void
+}
+
+export class MainGameThread implements Thread {
     #worker = mainGameThreadConstructor()
 
-    constructor() {}
+    constructor() {
+        this.#worker.onerror = err => console.error("main worker exception", err)
+        this.#worker.onmessageerror = err => console.error("main worker could not process message", err)
+    }
 
     postMessage(code: mainThreadCodes, payload: Float64Array) {
         const message: MainThreadMessage = { code, payload }
         // pass payload by reference
         this.#worker.postMessage(message, [payload.buffer])
-        this.#worker.onerror = err => console.error(err)
-        this.#worker.onmessageerror = err => console.error(err)
     }
 
     set onmessage(handler: (message: MessageEvent<RenderingThreadMessage>) => void) {
@@ -25,7 +39,7 @@ export class MainGameThread {
     }
 
     ping() {
-        this.postMessage(mainThreadCodes.PING, emptyPayload())
+        this.postMessage(7, emptyPayload())
     }
 
     notifyKeyDown(event: KeyboardEvent) {
@@ -40,3 +54,48 @@ export class MainGameThread {
         this.#worker.terminate()
     }
 }
+
+/*
+export class HelperGameThread implements Thread {
+    #worker = helperGameThreadConstructor()
+    busy = false
+
+    id: Readonly<number>
+
+    constructor(id: number) {
+        this.id = id
+        this.#worker.onerror = err => console.error("worker", this.id, "exception", err)
+        this.#worker.onmessageerror = err => console.error(err)
+    }
+
+    postMessage(code: helperGameThreadCodes, payload: Float64Array) {
+        const message: HelperGameThreadMessage = { code, payload }
+        // pass payload by reference
+        this.#worker.postMessage(message, [payload.buffer])
+    }
+
+    async postMessagePromise(code: helperGameThreadCodes, payload: Float64Array): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.onmessage = message => {
+                console.log(message)
+                resolve()
+            }
+            this.#worker.onmessageerror = messageError => reject()
+            this.#worker.onerror = error => reject()
+            this.postMessage(code, payload)
+        })
+    }
+
+    set onmessage(handler: (message: MessageEvent<MainThreadMessage>) => void) {
+        this.#worker.onmessage = handler 
+    }
+
+    ping() {
+        this.postMessage(helperGameThreadCodes.PING, new Float64Array([this.id]))  
+    }
+
+    terminate() {
+        this.#worker.terminate()
+    }
+}
+*/

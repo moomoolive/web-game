@@ -1,11 +1,8 @@
 import { MainThreadMessage as Data, ThreadExecutor } from "@/libraries/workers/types"
 import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
-//import { HelperGameThread } from "@/libraries/workers/index"
-
-type MainThreadFunctionLookup = {
-    [key in mainThreadCodes]: ThreadExecutor
-}
+import { HelperGameThread } from "@/libraries/workers/index"
+//import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 
 function sendToRenderingThread(code: renderingThreadCodes, payload: Float64Array) {
     const message = { code, payload }
@@ -24,6 +21,10 @@ function keyUpResponse(data: Float64Array) {
     sendToRenderingThread(renderingThreadCodes.KEY_UP_RESPONSE, data)
 } 
 
+type MainThreadFunctionLookup = {
+    [key in mainThreadCodes]: ThreadExecutor
+}
+
 const FUNCTION_LOOKUP: Readonly<MainThreadFunctionLookup> = {
     [mainThreadCodes.PING]: function (data: Float64Array) {
         const unixTimestamp = Date.now()
@@ -39,26 +40,24 @@ const FUNCTION_LOOKUP: Readonly<MainThreadFunctionLookup> = {
         keyUpResponse(data)
         return data
     },
-    [mainThreadCodes.ACKNOWLEDGE_HELPER_PING](data) {
+    [mainThreadCodes.ACKNOWLEDGE_HELPER_PING]: function(data) {
         const [workerId] = data
         console.log("worker", workerId, "ping acknowledged")
         return data
     }
 }
 
-function handleMessage(message: MessageEvent<Data>) {
+function onMessage(message: MessageEvent<Data>) {
     const { code, payload } = message.data
-    console.log(message)
     FUNCTION_LOOKUP[code](payload)
 }
 
-/*
 const workers = []
 for (let i = 0; i < 2; i++) {
     workers.push(new HelperGameThread(i))
-    workers[i].onmessage = handleMessage
+    const worker = workers[i]
+    worker.onmessage = onMessage
     workers[i].ping()
 }
-*/
 
-self.onmessage = handleMessage
+self.onmessage = onMessage
