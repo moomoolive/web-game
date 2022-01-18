@@ -23,7 +23,7 @@ let keyUpHandler = (event: KeyboardEvent) => {}
 const FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
     [renderingThreadCodes.RETURN_PING]: function(data: Float64Array) {
         const [unixTimestamp] = data
-        console.log("main thread returned ping, recieved @", unixTimestamp)
+        console.log("main thread ping acknowledged")
         return data
     },
     [renderingThreadCodes.KEY_DOWN_RESPONSE]: function(data: Float64Array) {
