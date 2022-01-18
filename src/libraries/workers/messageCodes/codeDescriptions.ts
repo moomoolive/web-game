@@ -1,8 +1,8 @@
-import { MAIN_THREAD_CODES } from "./mainThread"
-import { RENDERING_THREAD_CODES } from "./renderingThread"
+import { mainThreadCodes } from "./mainThread"
+import { renderingThreadCodes } from "./renderingThread"
 
-type allThreadCodes = MAIN_THREAD_CODES |
-    RENDERING_THREAD_CODES
+type allThreadCodes = mainThreadCodes |
+    renderingThreadCodes
 
 type ThreadCodeToFunctionDescription = {
     [key in allThreadCodes]: string
@@ -11,8 +11,10 @@ type ThreadCodeToFunctionDescription = {
 export const debugCode = "debug: "
 
 export const descriptions: Readonly<ThreadCodeToFunctionDescription> = {
-    [MAIN_THREAD_CODES.HELLO]: debugCode + "pings the main game thread",
-    [MAIN_THREAD_CODES.UNKNOWN]: "unknown",
-    [RENDERING_THREAD_CODES.RETURN_HELLO]: debugCode + "returns ping from rendering thread",
-    [RENDERING_THREAD_CODES.UNKNOWN]: "unknown"
+    [mainThreadCodes.PING]: debugCode + "pings the main game thread",
+    [mainThreadCodes.KEY_DOWN]: "sends keycode of pressed keyboard key",
+    [mainThreadCodes.KEY_UP]: "sends keycode of unpressed keyboard key",
+    [renderingThreadCodes.RETURN_PING]: debugCode + "returns ping from rendering thread",
+    [renderingThreadCodes.KEY_DOWN_RESPONSE]: "not documented",
+    [renderingThreadCodes.KEY_UP_RESPONSE]: "not documented",
 }

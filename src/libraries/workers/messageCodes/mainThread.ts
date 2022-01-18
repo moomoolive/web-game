@@ -1,5 +1,6 @@
-export enum MAIN_THREAD_CODES {
-    HELLO = 1,
-    UNKNOWN = 2
+export enum mainThreadCodes {
+    PING = 1,
+    KEY_DOWN = 2,
+    KEY_UP = 3,
 }
 

@@ -1,9 +1,6 @@
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader"
 import * as three from "three"
 
-let keyUpHandler = (e: KeyboardEvent) => {}
-let keyDownHandler = (e: KeyboardEvent) => {}
-
 class Controller {
     #target = new three.Group()
     _move = {
@@ -21,44 +18,35 @@ class Controller {
         this.#target = target
     }
 
-    initalize() {
-        keyDownHandler = (event: KeyboardEvent) => this.onKeyDown(event)
-        document.addEventListener("keydown", keyDownHandler)
-        keyUpHandler = (event: KeyboardEvent) => this.onKeyUp(event)
-        document.addEventListener("keyup", keyUpHandler)
-    }
-
-    onKeyDown(event: KeyboardEvent) {
-        const input = event.key.toLowerCase()
-        switch (input) {
-            case "w":
+    onKeyDown(keyCode: number) {
+        switch (keyCode) {
+            case 87: // w
                 this._moveForward = true
                 break
-            case "a":
+            case 65: // a
                 this._moveLeft = true
                 break
-            case "s":
+            case 83: // s
                 this._moveBackward = true
                 break
-            case "d":
+            case 68: // d
                 this._moveRight = true
                 break
         }
     }
 
-    onKeyUp(event: KeyboardEvent) {
-        const input = event.key.toLowerCase()
-        switch (input) {
-            case "w":
+    onKeyUp(keyCode: number) {
+        switch (keyCode) {
+            case 87: // w
                 this._moveForward = false
                 break
-            case "a":
+            case 65: // a
                 this._moveLeft = false
                 break
-            case "s":
+            case 83: // s
                 this._moveBackward = false
                 break
-            case "d":
+            case 68: // d
                 this._moveRight = false
                 break
         }
@@ -119,11 +107,6 @@ class Controller {
 
         oldPosition.copy(this.#target.position)
     }
-
-    destroy() {
-        document.removeEventListener("keydown", keyDownHandler)
-        document.removeEventListener("keyup", keyUpHandler)
-    }
 }
 
 type AnimationStates = "idle" | "walk"
@@ -167,10 +150,17 @@ export class Player {
         })
     }
 
+    onKeyDown(keyCode: number) {
+        this.#controller.onKeyDown(keyCode)
+    }
+
+    onKeyUp(keyCode: number) {
+        this.#controller.onKeyUp(keyCode)
+    }
+
     async initialize(): Promise<void> {
         try {
             await this.#loadModel()
-            this.#controller.initalize()
         } catch(err) {
             throw err
         }
@@ -208,6 +198,5 @@ export class Player {
     }
 
     destroy() {
-        this.#controller.destroy()
     }
 }

@@ -7,14 +7,35 @@ import { Player } from "./player"
 import { MILLISECONDS_IN_SECOND } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
 import { MainGameThread } from "@/libraries/workers/index"
-import { MAIN_THREAD_CODES } from "@/libraries/workers/messageCodes/mainThread"
-import { RENDERING_THREAD_CODES } from "@/libraries/workers/messageCodes/renderingThread"
+import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 import { ThreadExecutor } from "@/libraries/workers/types"
+import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
 
 const HAS_NOT_RENDERED_YET = -1
 
 type RenderingThreadFunctionLookup = {
-    [key in RENDERING_THREAD_CODES]: ThreadExecutor
+    [key in renderingThreadCodes]: ThreadExecutor
+}
+
+let player = new Player()
+let keyDownHandler = (event: KeyboardEvent) => {}
+let keyUpHandler = (event: KeyboardEvent) => {}
+const FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
+    [renderingThreadCodes.RETURN_PING]: function(data: Float64Array) {
+        const [unixTimestamp] = data
+        console.log("main thread returned ping, recieved @", unixTimestamp)
+        return data
+    },
+    [renderingThreadCodes.KEY_DOWN_RESPONSE]: function(data: Float64Array) {
+        const [keyCode] = data
+        player.onKeyDown(keyCode)
+        return data
+    },
+    [renderingThreadCodes.KEY_UP_RESPONSE]: function(data: Float64Array) {
+        const [keyCode] = data
+        player.onKeyUp(keyCode)
+        return data
+    }
 }
 
 interface GameOptions {
@@ -27,7 +48,6 @@ type VueRef<T> = Readonly<Ref<T>>
 interface UIReferences {
     paused: VueRef<boolean>
     showMenu: VueRef<boolean>
-    frozen: VueRef<boolean>
     debugCameraEnabled: VueRef<boolean>
     renderCount: VueRef<number>
 }
@@ -37,22 +57,17 @@ export class Game {
     #camera = new three.PerspectiveCamera()
     #scene = new three.Scene()
     #previousFrameTimestamp = HAS_NOT_RENDERED_YET
-    #addedToDOM = false
-    #player = new Player()
-    #mainThread = new MainGameThread()
+    player = new Player()
+    mainThread = new MainGameThread()
     
     // garabage collection
     #sceneMaterials: three.Material[] = []
     #sceneGeometry: three.BufferGeometry[] = []
-    
-    // game flags
-    #developmentMode = true
 
     // debug tools
     #debugCamera = new OrbitControls(this.#camera, this.#renderer.domElement)
     #debugCameraEnabled = ref(false)
     #paused = ref(false)
-    #frozen = ref(false)
     #renderCount = ref(0)
 
     // ui elements
@@ -61,35 +76,22 @@ export class Game {
     // uninitialized
     #thirdPersonCamera: ThirdPersonCamera
     #performanceMeter: Stats
-    #FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup>
 
     constructor(options: GameOptions) {
-        this.#developmentMode = options.developmentMode
         this.#performanceMeter = options.performanceMeter
 
         this.#renderer = this.#initRenderer()
         this.#camera = this.#initCamera()
         this.#scene = new three.Scene()
         this.#debugCamera = this.#initDebugCamera()
-        this.#thirdPersonCamera = new ThirdPersonCamera(this.#camera, this.#player.model)
+        this.#thirdPersonCamera = new ThirdPersonCamera(this.#camera, player.model)
         this.#scene.add(this.#createDirectionalLight())
         this.#loadWorldAssets()
         this.#basicWorldSetup()
         this.#addPlayer()
-        
-        this.#FUNCTION_LOOKUP = {
-            [RENDERING_THREAD_CODES.RETURN_HELLO]: function(data: Float64Array) {
-                console.log("hello returned from main thread @", new Date())
-                return data
-            },
-            [RENDERING_THREAD_CODES.UNKNOWN]: function(data: Float64Array) {
-                return data
-            }
-        }
-
-        this.#mainThread.onmessage = message => {
+        this.mainThread.onmessage = message => {
             const { code, payload } = message.data
-            this.#FUNCTION_LOOKUP[code](payload)
+            FUNCTION_LOOKUP[code](payload)
         }
     }
 
@@ -97,7 +99,6 @@ export class Game {
         return {
             paused: this.#paused,
             showMenu: this.#showMenu,
-            frozen: this.#frozen,
             debugCameraEnabled: this.#debugCameraEnabled,
             renderCount: this.#renderCount
         }
@@ -105,36 +106,27 @@ export class Game {
 
     async #addPlayer() {
         try {
-            await this.#player.initialize()
-            this.#mainThread.postMessage(MAIN_THREAD_CODES.HELLO, new Float64Array(2).fill(2))
-            this.#scene.add(this.#player.model)
-            this.#thirdPersonCamera = new ThirdPersonCamera(this.#camera, this.#player.model)
+            await player.initialize()
+            this.mainThread.ping()
+            this.#scene.add(player.model)
+            this.#thirdPersonCamera = new ThirdPersonCamera(this.#camera, player.model)
         } catch(err) {
             console.error("ASSET_LOADING_ERROR:", err)
         }
     }
 
-    addToDOM() {
-        if (this.#addedToDOM) {
-            return
-        }
-        // sometimes when using hot reload
-        // previous canvas is still attached to dom
-        // and has webGL buffers that haven't been
-        // garbage collected
-        if (this.#developmentMode) {
-            const oldCanvases = document.getElementsByTagName("canvas")
-            for (let i = 0; i < oldCanvases.length; i++) {
-                const canvas = oldCanvases[i]
-                // garabage collect all old 3d model buffers
-                this.#garbageCollectAllContext(canvas)
-                // throws error for some reason???
-                //document.body.removeChild(canvas)
-            }
-        }
-        document.body.appendChild(this.#renderer.domElement)
+    domElement(): Readonly<HTMLCanvasElement> {
+        return this.#renderer.domElement
+    }
+
+    initialize() {        
         window.addEventListener("resize", () => this.#onWindowResize())
-        this.#addedToDOM = true
+        
+        keyDownHandler = event => this.mainThread.notifyKeyDown(event)
+        window.addEventListener("keydown", keyDownHandler)
+
+        keyUpHandler = event => this.mainThread.notifyKeyUp(event)
+        window.addEventListener("keyup", keyUpHandler)
     }
 
     #initDebugCamera(): OrbitControls {
@@ -215,8 +207,8 @@ export class Game {
     }
 
     destroy() {
-        this.#freeze()
-        this.#player.destroy()
+        window.removeEventListener("keydown", keyDownHandler)
+        player.destroy()
         // currently a memory leak occurs for the "#onWindowResize"
         // window listener
         //window.removeEventListener("resize", resizeCallback)
@@ -224,27 +216,18 @@ export class Game {
         this.#sceneGeometry.map(geometry => geometry.dispose())
         this.#sceneMaterials.map(material => material.dispose())
         // do a canvas wide garbage collection, in case something was missed
-        this.#garbageCollectAllContext(this.#renderer.domElement)
+        garbageCollectWebGLContext(this.#renderer.domElement)
         this.#debugCamera.dispose()
         this.#renderer.dispose()
-        this.#mainThread.terminate()
-    }
-
-    // garabage collects all webGL buffers assocaited with canvas
-    #garbageCollectAllContext(canvas: HTMLCanvasElement) {
-        canvas.getContext("webgl")?.getExtension("WEBGL_lose_context")?.loseContext()
-        canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()
+        this.mainThread.terminate()
     }
 
     #updateEntities(timeElaspsedMilliseconds: number) {
         const timeElapsedSeconds = timeElaspsedMilliseconds / MILLISECONDS_IN_SECOND
-        this.#player.update(timeElapsedSeconds)
+        player.update(timeElapsedSeconds)
     }
 
     #renderLoop() {
-        if (this.#frozen.value) {
-            return
-        }
         window.requestAnimationFrame(currentTimestamp => {
             if (!this.#paused.value) {
                 this.#performanceMeter.begin()
@@ -291,31 +274,6 @@ export class Game {
             this.disableDebugCamera()
         } else {
             this.enableDebugCamera()
-        }
-    }
-
-    // this method doesn't allow anything in the game to render
-    // even the camera; If you only want to freeze game entities
-    // use .pause()
-    #freeze() {
-        this.#frozen.value = true
-        this.disableDebugCamera()
-    }
-
-    #unfreeze() {
-        if (!this.#frozen) {
-            return
-        }
-        this.#frozen.value = false
-        this.enableDebugCamera()
-        this.#renderLoop()
-    }
-
-    toggleFreeze() {
-        if (this.#frozen.value) {
-            this.#unfreeze()
-        } else {
-            this.#freeze()
         }
     }
 

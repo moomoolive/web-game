@@ -98,19 +98,18 @@ const { confirm } = useActions()
 const FPS_METER = 0
 const performanceMeter = new Stats()
 performanceMeter.showPanel(FPS_METER)
-document.body.appendChild(performanceMeter.dom)
 
 const game = new Game({ 
     developmentMode: true, 
     performanceMeter,
 })
+document.body.appendChild(game.domElement())
 
 // these are readonly; change can only be made from
 // inside "game"
 const { 
     paused, 
     showMenu, 
-    frozen, 
     debugCameraEnabled, 
     renderCount 
 } = game.vueRefs
@@ -144,10 +143,12 @@ onUnmounted(() => {
     game.destroy()
     document.body.removeChild(performanceMeter.dom)
 })
-
+ 
 onMounted(() => { 
     window.setTimeout(() => {
-        game.addToDOM()
+        document.body.appendChild(performanceMeter.dom)
+        game.initialize()
+        document.body.appendChild(game.domElement())
         game.run() 
     }, 2_000)
 })

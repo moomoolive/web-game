@@ -1,4 +1,5 @@
-export enum RENDERING_THREAD_CODES {
-    RETURN_HELLO = 10_000,
-    UNKNOWN = 10_001
+export enum renderingThreadCodes {
+    RETURN_PING = 10_000,
+    KEY_DOWN_RESPONSE = 10_001,
+    KEY_UP_RESPONSE = 10_002,
 }

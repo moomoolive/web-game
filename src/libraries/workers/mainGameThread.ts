@@ -1,25 +1,35 @@
 import { MainThreadMessage as Data, ThreadExecutor } from "./types"
-import { MAIN_THREAD_CODES } from "./messageCodes/mainThread"
-import { RENDERING_THREAD_CODES } from "@/libraries/workers/messageCodes/renderingThread"
+import { mainThreadCodes } from "./messageCodes/mainThread"
+import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 
 type MainThreadFunctionLookup = {
-    [key in MAIN_THREAD_CODES]: ThreadExecutor
+    [key in mainThreadCodes]: ThreadExecutor
+}
+
+function sendToRenderingThread(code: renderingThreadCodes, payload: Float64Array) {
+    const message = { code, payload }
+    self.postMessage(message, [payload.buffer])
+}
+
+function returnPing(unixTimestamp: number) {
+    sendToRenderingThread(renderingThreadCodes.RETURN_PING, new Float64Array([unixTimestamp]))
 }
 
 const FUNCTION_LOOKUP: Readonly<MainThreadFunctionLookup> = {
-    [MAIN_THREAD_CODES.HELLO]: function (data: Float64Array) {
-        console.log("hello recieved on main thread @", new Date())
-        sendToRenderingThread(RENDERING_THREAD_CODES.RETURN_HELLO, new Float64Array(2).fill(5))
+    [mainThreadCodes.PING]: function (data: Float64Array) {
+        const unixTimestamp = Date.now()
+        console.log("ping recieved on main thread @", unixTimestamp)
+        returnPing(unixTimestamp)
         return data
     },
-    [MAIN_THREAD_CODES.UNKNOWN]: function(data: Float64Array) {
+    [mainThreadCodes.KEY_DOWN]: function(data: Float64Array) {
+        sendToRenderingThread(renderingThreadCodes.KEY_DOWN_RESPONSE, data)
         return data
     },
-}
-
-function sendToRenderingThread(code: RENDERING_THREAD_CODES, payload: Float64Array) {
-    const message = { code, payload }
-    self.postMessage(message, [payload.buffer])
+    [mainThreadCodes.KEY_UP]: function(data) {
+        sendToRenderingThread(renderingThreadCodes.KEY_UP_RESPONSE, data)
+        return data
+    }
 }
 
 self.onmessage = (message: MessageEvent<Data>) => {
