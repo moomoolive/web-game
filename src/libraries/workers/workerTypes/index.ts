@@ -13,7 +13,7 @@ import { renderingThreadIdentity, mainThreadIdentity } from "@/libraries/workers
 export interface Thread {
     onmessage: Function
     postMessage: Function
-    ping: () => void | Promise<void>
+    ping: () => void
     terminate: () => void
     setFatalErrorHandler: (handler: (err: ErrorEvent) => void) => void
 }
@@ -49,7 +49,11 @@ export class MainGameThread implements Thread {
         this.worker.onmessage = handler 
     }
 
-    async ping(): Promise<void> {
+    ping() {
+        this.postMessage("ping", emptyPayload())
+    }
+
+    async checkIfReady(): Promise<void> {
         if (!this.worker.onmessage) {
             return Promise.reject()
         }
@@ -58,8 +62,8 @@ export class MainGameThread implements Thread {
         return new Promise((resolve, reject) => {
             this.worker.onmessage = (message: MessageEvent<RenderingThreadMessage>) => {
                 this.worker.onmessage = previousOnMessage
-                this.worker.onmessage(message)
                 this.worker.onmessageerror = previousOnMessageError
+                this.worker.onmessage(message)
                 resolve()
             }
             this.worker.onmessageerror = () => {
@@ -94,12 +98,11 @@ export class HelperGameThread implements Thread {
     busy = false
 
     id: Readonly<number>
-    errorHandler: (message: MessageEvent<MainThreadMessage>) => void
     
     constructor(id: number) {
         this.id = id
 
-        this.errorHandler = (message: MessageEvent<MainThreadMessage>) => {
+        this.worker.onmessageerror = (message: MessageEvent<MainThreadMessage>) => {
             console.error(
                 mainThreadIdentity(),
                 "error occur when recieving message from worker", 
@@ -108,7 +111,6 @@ export class HelperGameThread implements Thread {
                 message
             )
         }
-        this.worker.onmessageerror = this.errorHandler
 
         this.worker.onerror = err => {
             console.error(mainThreadIdentity(), "fatal error occurred on worker", this.id, ", err:", err)
@@ -125,16 +127,24 @@ export class HelperGameThread implements Thread {
         this.worker.postMessage(message, [payload.buffer])
     }
     
-    async postMessagePromise(code: helperGameThreadCodes, payload: Float64Array): Promise<void> {
+    async postMessageAsync(code: helperGameThreadCodes, payload: Float64Array): Promise<void> {
+        if (!this.worker.onmessage) {
+            return Promise.reject()
+        }
+        const previousOnMessage = this.worker.onmessage
+        const previousOnMessageError = this.worker.onmessageerror
         return new Promise((resolve, reject) => {
-            this.onmessage = message => {
-                console.log(message)
+            this.worker.onmessage = (message: MessageEvent<RenderingThreadMessage>) => {
+                this.worker.onmessage = previousOnMessage
+                this.worker.onmessageerror = previousOnMessageError
+                this.worker.onmessage(message)
                 resolve()
-                this.worker.onmessageerror = this.errorHandler
             }
-            this.worker.onmessageerror = (message: MessageEvent<MainThreadMessage>) => {
-                this.errorHandler(message)
+            this.worker.onmessageerror = () => {
+                console.warn(renderingThreadIdentity(), "FATAL, main thread did not return ping")
                 reject()
+                this.worker.onmessage = previousOnMessage
+                this.worker.onmessageerror = previousOnMessageError
             }
             this.postMessage(code, payload)
         })
@@ -146,6 +156,10 @@ export class HelperGameThread implements Thread {
     
     ping() {
         this.postMessage("ping", new Float64Array([this.id]))  
+    }
+
+    async pingAsync(): Promise<void> {
+        await this.postMessageAsync("ping", new Float64Array([this.id]))
     }
 
     terminate() {

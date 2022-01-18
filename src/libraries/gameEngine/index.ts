@@ -184,7 +184,7 @@ export function createGame(options: GameOptions): Game {
         },
         async initialize(): Promise<void> {
             try {
-                await mainThread.ping()
+                await mainThread.checkIfReady()
                 window.addEventListener("resize", onWindowResize)
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)

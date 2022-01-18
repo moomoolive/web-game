@@ -46,15 +46,17 @@ function handleMessage(message: MessageEvent<Data>) {
 } 
 
 const workers = []
-for (let i = 0; i < 1; i++) {
+const pingPromises = []
+for (let i = 0; i < 2; i++) {
     workers.push(new HelperGameThread(i))
     const worker = workers[i]
     worker.onmessage = handleMessage
     worker.setFatalErrorHandler(err => {
         console.error(`${mainThreadIdentity()} fatal error occurred on worker", worker.id, ", err:`, err)
     })
-    worker.ping()
+    pingPromises.push(worker.pingAsync())
 }
+await Promise.all(pingPromises)
 
 self.onmessage = handleMessage
 
@@ -65,3 +67,5 @@ self.onerror = err => {
 self.onmessageerror = message => {
     console.error(`${mainThreadIdentity()} error occurred when recieving message from either rendering or helper threads, message:`, message)
 }
+
+console.log("main thread init")
