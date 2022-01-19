@@ -76,3 +76,31 @@ export function createWorldPlane(): MeshElements {
     plane.rotation.x = -Math.PI / 2
     return { mesh: plane, material, geometry }
 }
+
+export class EngineIndicator {
+    private static ENGINE_TIMEOUT_MILLISECONDS = 5_000
+    private static ENGINE_FAILURE_JOB_NOT_SCHEDULED = -1
+
+    private reject = (value: boolean) => {}
+    private resolve = (value: boolean) => {}
+    private isReady = false
+    private engineFailureJobId = EngineIndicator.ENGINE_FAILURE_JOB_NOT_SCHEDULED
+
+    awaitReadySignal(): Promise<boolean> {
+        return new Promise((resolve, reject) => {
+            this.reject = reject
+            this.resolve = resolve
+            this.engineFailureJobId = window.setTimeout(() => {
+                if (!this.isReady) {
+                    this.reject(false)
+                }
+            }, EngineIndicator.ENGINE_TIMEOUT_MILLISECONDS)
+        })
+    }
+
+    setReady() {
+        window.clearTimeout(this.engineFailureJobId)
+        this.resolve(true)
+        this.isReady = true
+    }
+}

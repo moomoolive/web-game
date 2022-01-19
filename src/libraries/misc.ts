@@ -40,7 +40,7 @@ export function deviceIsCompatible(): boolean {
 
 export async function sleepSeconds(seconds: number): Promise<boolean> {
     return new Promise(resolve => {
-        window.setTimeout(() => resolve(true), seconds * MILLISECONDS_IN_SECOND)
+        setTimeout(() => resolve(true), seconds * MILLISECONDS_IN_SECOND)
     })
 }
 export type DeviceType = "mobile" | "desktop" | "console" | "tablet"

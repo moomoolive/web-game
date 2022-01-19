@@ -16,7 +16,8 @@ import {
     createSceneCamera,
     createDirectionalLight,
     createWorldBackground,
-    createWorldPlane
+    createWorldPlane,
+    EngineIndicator
 } from "./utils/initialization"
 
 const HAS_NOT_RENDERED_YET = -1
@@ -67,6 +68,8 @@ export function createGame(options: GameOptions): Game {
     const player = new Player()
     let thirdPersonCamera = new ThirdPersonCamera(camera, player.model)
 
+    const mainEngineIndicator = new EngineIndicator()
+
     const mainThread = new MainGameThread()
     mainThread.setFatalErrorHandler(err => {
         console.error(
@@ -105,7 +108,7 @@ export function createGame(options: GameOptions): Game {
         })
         .catch(err => console.error(renderingThreadIdentity(), "ASSET_LOADING_ERROR:", err))
     
-    const FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
+    const HANDLER_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
         keyDownResponse(data: Float64Array) {
             const [keyCode] = data
             player.onKeyDown(keyCode)
@@ -116,6 +119,7 @@ export function createGame(options: GameOptions): Game {
         },
         acknowledgePing(_: Float64Array) {
             console.log(renderingThreadIdentity(), "ping acknowledged @", Date.now())
+            mainEngineIndicator.setReady()
             mainThread.renderingPingAcknowledged()
         }
     }
@@ -123,7 +127,7 @@ export function createGame(options: GameOptions): Game {
     mainThread.setOnMessageHandler(message => {
         try {
             const { handler, payload } = message.data
-            FUNCTION_LOOKUP[handler](payload)
+            HANDLER_LOOKUP[handler](payload)
         } catch(err) {
             console.warn(renderingThreadIdentity(), "something went wrong when looking up function, payload", message.data)
             console.error("error:", err)
@@ -181,7 +185,7 @@ export function createGame(options: GameOptions): Game {
         },
         async initialize(): Promise<void> {
             try {
-                //await mainThread.pingAsync()
+                await mainEngineIndicator.awaitReadySignal()
                 window.addEventListener("resize", onWindowResize)
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)

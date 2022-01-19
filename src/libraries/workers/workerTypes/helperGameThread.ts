@@ -24,7 +24,7 @@ type HelperGameThreadFunctionLookup = {
     [key in helperGameThreadCodes]: ThreadExecutor
 }
 
-const FUNCTION_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
+const HANDLER_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
     acknowledgePing(data: Float64Array) {
         const [workerId] = data
         worker_id = workerId
@@ -36,7 +36,7 @@ const FUNCTION_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
 self.onmessage = (message: MessageEvent<Data>) => {
     try {
         const { handler, payload } = message.data
-        FUNCTION_LOOKUP[handler](payload)
+        HANDLER_LOOKUP[handler](payload)
     } catch(err) {
         console.warn(`${debugIdentity()} something went wrong when looking up function, payload`, message.data)
         console.error("error:", err)
