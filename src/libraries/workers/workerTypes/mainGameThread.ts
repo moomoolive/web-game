@@ -3,6 +3,7 @@ import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 import { HelperGameThread } from "@/libraries/workers/workerTypes/index"
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
+import { emptyPayload } from "@/libraries/workers/common/index"
 
 type MainThreadFunctionLookup = {
     [key in mainThreadCodes]: ThreadExecutor
@@ -14,24 +15,18 @@ function sendToRenderingThread(handler: renderingThreadCodes, payload: Float64Ar
 }
 
 const FUNCTION_LOOKUP: Readonly<MainThreadFunctionLookup> = {
-    ping(data: Float64Array) {
-        const unixTimestamp = Date.now()
-        console.log(`${mainThreadIdentity()} recieved ping @`, unixTimestamp)
-        sendToRenderingThread("returnPing", new Float64Array([unixTimestamp]))
-        return data
-    },
     keyDown(data: Float64Array) {
         sendToRenderingThread("keyDownResponse", data)
-        return data
     },
-    keyUp(data) {
+    keyUp(data: Float64Array) {
         sendToRenderingThread("keyUpResponse", data)
-        return data
     },
-    acknowledgeHelperPing(data) {
+    helperPingAcknowledged(data: Float64Array) {
         const [workerId] = data
-        console.log(mainThreadIdentity(), "game helper", workerId, "ping acknowledged")
-        return data
+        console.log(mainThreadIdentity(), "game helper thread", workerId, "responded to ping")
+    },
+    renderingPingAcknowledged(_) {
+        console.log(`${mainThreadIdentity()} rendering thread responded to ping`)
     }
 }
 
@@ -43,16 +38,18 @@ function handleMessage(message: MessageEvent<Data>) {
         console.warn(`${mainThreadIdentity()} something went wrong when looking up function, payload`, message.data)
         console.error("error:", err)
     }
-} 
+}
 
+
+sendToRenderingThread("acknowledgePing", emptyPayload())
 const workers = []
 const pingPromises = []
 for (let i = 0; i < 2; i++) {
     workers.push(new HelperGameThread(i))
     const worker = workers[i]
-    worker.onmessage = handleMessage
+    worker.setOnMessageHandler(handleMessage) 
     worker.setFatalErrorHandler(err => {
-        console.error(`${mainThreadIdentity()} fatal error occurred on worker", worker.id, ", err:`, err)
+        console.error(mainThreadIdentity(), "fatal error occurred on worker", worker.id, ", err:", err)
     })
     pingPromises.push(worker.pingAsync())
 }
@@ -67,5 +64,3 @@ self.onerror = err => {
 self.onmessageerror = message => {
     console.error(`${mainThreadIdentity()} error occurred when recieving message from either rendering or helper threads, message:`, message)
 }
-
-console.log("main thread init")

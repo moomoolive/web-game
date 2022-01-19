@@ -106,24 +106,21 @@ export function createGame(options: GameOptions): Game {
         .catch(err => console.error(renderingThreadIdentity(), "ASSET_LOADING_ERROR:", err))
     
     const FUNCTION_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
-        returnPing(data: Float64Array) {
-            const [unixTimestamp] = data
-            console.log(renderingThreadIdentity(), "main thread ping acknowledged @", unixTimestamp)
-            return data
-        },
         keyDownResponse(data: Float64Array) {
             const [keyCode] = data
             player.onKeyDown(keyCode)
-            return data
         },
         keyUpResponse(data: Float64Array) {
             const [keyCode] = data
             player.onKeyUp(keyCode)
-            return data
+        },
+        acknowledgePing(_: Float64Array) {
+            console.log(renderingThreadIdentity(), "ping acknowledged @", Date.now())
+            mainThread.renderingPingAcknowledged()
         }
     }
 
-    mainThread.onmessage = message => {
+    mainThread.setOnMessageHandler(message => {
         try {
             const { handler, payload } = message.data
             FUNCTION_LOOKUP[handler](payload)
@@ -131,7 +128,7 @@ export function createGame(options: GameOptions): Game {
             console.warn(renderingThreadIdentity(), "something went wrong when looking up function, payload", message.data)
             console.error("error:", err)
         }
-    }
+    })
 
     function onKeyDown(event: KeyboardEvent) {
         mainThread.notifyKeyDown(event)
@@ -184,7 +181,7 @@ export function createGame(options: GameOptions): Game {
         },
         async initialize(): Promise<void> {
             try {
-                await mainThread.checkIfReady()
+                //await mainThread.pingAsync()
                 window.addEventListener("resize", onWindowResize)
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)

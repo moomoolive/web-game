@@ -1,2 +1,2 @@
 
-export type helperGameThreadCodes = "ping" 
+export type helperGameThreadCodes = "acknowledgePing"

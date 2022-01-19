@@ -25,12 +25,11 @@ type HelperGameThreadFunctionLookup = {
 }
 
 const FUNCTION_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
-    ping(data: Float64Array) {
+    acknowledgePing(data: Float64Array) {
         const [workerId] = data
         worker_id = workerId
-        console.log(`${debugIdentity()} recieved ping @`, Date.now())
-        sendToMainThread("acknowledgeHelperPing", data)
-        return data
+        console.log(`${debugIdentity()} ping acknowledged @`, Date.now())
+        sendToMainThread("helperPingAcknowledged", data)
     }
 }
 

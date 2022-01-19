@@ -14,4 +14,4 @@ export type MainThreadMessage = ThreadCommunication<mainThreadCodes>
 export type RenderingThreadMessage = ThreadCommunication<renderingThreadCodes>
 export type HelperGameThreadMessage = ThreadCommunication<helperGameThreadCodes>
 
-export type ThreadExecutor = (data: Float64Array) => Float64Array
+export type ThreadExecutor = (data: Float64Array) => void

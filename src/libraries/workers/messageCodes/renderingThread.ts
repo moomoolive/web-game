@@ -1,4 +1,4 @@
 export type renderingThreadCodes = 
-    "returnPing" |
     "keyDownResponse" |
-    "keyUpResponse"
+    "keyUpResponse" |
+    "acknowledgePing"

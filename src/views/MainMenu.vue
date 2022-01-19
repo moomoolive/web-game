@@ -14,13 +14,13 @@
             class="mb-4" 
             @click="$router.push('/game')"
         >
-            <div class="animate-bounce">
+            <span>
                 <font-awesome-icon 
-                    class="mr-1 text-secondary-color" 
+                    class="mr-1 text-secondary-color animate-bounce" 
                     :icon="faGamepad"
                 />
-                New Game
-            </div>
+            </span>
+            New Game
         </v-btn>
 
         <v-btn :disabled="true" color="surface" x-large block elevation="3" class="mb-4">

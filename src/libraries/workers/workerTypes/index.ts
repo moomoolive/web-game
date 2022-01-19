@@ -10,12 +10,13 @@ import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGa
 import helperGameThreadConstructor from "worker:@/libraries/workers/workerTypes/helperGameThread"
 import { renderingThreadIdentity, mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 
-export interface Thread {
-    onmessage: Function
+type PossibleMessages = RenderingThreadMessage | MainThreadMessage
+
+export interface Thread<M=PossibleMessages> {
     postMessage: Function
-    ping: () => void
     terminate: () => void
     setFatalErrorHandler: (handler: (err: ErrorEvent) => void) => void
+    setOnMessageHandler: (handler: (message: MessageEvent<M>) => void) => void
 }
 
 export class MainGameThread implements Thread {
@@ -35,49 +36,22 @@ export class MainGameThread implements Thread {
         }
     }
 
+    terminate() {
+        this.worker.terminate()
+    }
+
     setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
         this.worker.onerror = handler
+    }
+
+    setOnMessageHandler(handler: (message: MessageEvent<RenderingThreadMessage>) => void) {
+        this.worker.onmessage = handler 
     }
 
     postMessage(handler: mainThreadCodes, payload: Float64Array) {
         const message: MainThreadMessage = { handler, payload }
         // pass payload by reference
         this.worker.postMessage(message, [payload.buffer])
-    }
-
-    set onmessage(handler: (message: MessageEvent<RenderingThreadMessage>) => void) {
-        this.worker.onmessage = handler 
-    }
-
-    ping() {
-        this.postMessage("ping", emptyPayload())
-    }
-
-    async checkIfReady(): Promise<void> {
-        if (!this.worker.onmessage) {
-            return Promise.reject()
-        }
-        const previousOnMessage = this.worker.onmessage
-        const previousOnMessageError = this.worker.onmessageerror
-        return new Promise((resolve, reject) => {
-            this.worker.onmessage = (message: MessageEvent<RenderingThreadMessage>) => {
-                this.worker.onmessage = previousOnMessage
-                this.worker.onmessageerror = previousOnMessageError
-                this.worker.onmessage(message)
-                resolve()
-            }
-            this.worker.onmessageerror = () => {
-                console.warn(renderingThreadIdentity(), "FATAL, main thread did not return ping")
-                reject()
-                this.worker.onmessage = previousOnMessage
-                this.worker.onmessageerror = previousOnMessageError
-            }
-            const message: MainThreadMessage = {
-                handler: "ping",
-                payload: emptyPayload()
-            }
-            this.worker.postMessage(message, [message.payload.buffer])
-        })
     }
 
     notifyKeyDown(event: KeyboardEvent) {
@@ -88,10 +62,11 @@ export class MainGameThread implements Thread {
         this.postMessage("keyUp", new Float64Array([event.keyCode]))
     }
 
-    terminate() {
-        this.worker.terminate()
+    renderingPingAcknowledged() {
+        this.postMessage("renderingPingAcknowledged", emptyPayload())
     }
 }
+
 
 export class HelperGameThread implements Thread {
     private worker = helperGameThreadConstructor()
@@ -117,8 +92,16 @@ export class HelperGameThread implements Thread {
         }
     }
 
+    terminate() {
+        this.worker.terminate()
+    }
+
     setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
         this.worker.onerror = handler
+    }
+
+    setOnMessageHandler(handler: (message: MessageEvent<MainThreadMessage>) => void) {
+        this.worker.onmessage = handler 
     }
     
     postMessage(handler: helperGameThreadCodes, payload: Float64Array) {
@@ -150,19 +133,54 @@ export class HelperGameThread implements Thread {
         })
     }
     
-    set onmessage(handler: (message: MessageEvent<MainThreadMessage>) => void) {
-        this.worker.onmessage = handler 
-    }
-    
     ping() {
-        this.postMessage("ping", new Float64Array([this.id]))  
+        this.postMessage("acknowledgePing", new Float64Array([this.id]))  
     }
 
     async pingAsync(): Promise<void> {
-        await this.postMessageAsync("ping", new Float64Array([this.id]))
+        try {
+            await this.postMessageAsync("acknowledgePing", new Float64Array([this.id]))
+        } catch(err) {
+            throw err
+        }
+    }
+}
+
+interface ThreadPoolOptions {
+    threadCount: number
+}
+
+const MAXIMUM_THREADS = navigator.hardwareConcurrency
+
+class HelperGameThreadPool {
+    private threads: HelperGameThread[] = []
+    private threadsWaiting = 0
+
+    private requestedThreads = 0
+
+    constructor(options: ThreadPoolOptions) {
+        if (options.threadCount < 1) {
+            console.warn(mainThreadIdentity(), "script requested thread pool to spawn 0 threads")
+        }
+        this.requestedThreads = options.threadCount
     }
 
-    terminate() {
-        this.worker.terminate()
+    private spawnThreads() {
+        const spawnCount = this.requestedThreads > MAXIMUM_THREADS ?
+            MAXIMUM_THREADS : this.requestedThreads
+        for (let i = 0; i < spawnCount; i++) {
+        }
+    }
+
+    threadCount(): Readonly<number> {
+        return this.threads.length
+    }
+
+    waitingThreadCount(): Readonly<number> {
+        return this.threadsWaiting
+    }
+
+    async join(): Promise<void> {
+
     }
 }
