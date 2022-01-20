@@ -1,41 +1,65 @@
 import { MainThreadMessage as Data, ThreadExecutor, RenderingThreadMessage } from "@/libraries/workers/types"
-import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
-import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
+import { MainThreadCodes, mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
+import { RenderingThreadCodes, renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 import { HelperGameThreadPool } from "@/libraries/workers/workerTypes/index"
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { emptyPayload } from "@/libraries/workers/common/index"
+import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
+import { 
+    renderingThreadStream, 
+    renderingThreadStreamWithPayload,
+    getThreadStreamHandler,
+    setThreadStreamId,
+    getThreadStreamId,
+    setThreadResponseId,
+    setThreadHandler,
+} from "@/libraries/workers/threadStreams/index"
 
 type MainThreadFunctionLookup = {
-    [key in mainThreadCodes]: ThreadExecutor
+    [key in MainThreadCodes]: ThreadExecutor
 }
 
-function sendToRenderingThread(handler: renderingThreadCodes, payload: Float64Array) {
-    const message: RenderingThreadMessage = { handler, payload }
-    self.postMessage(message, [payload.buffer])
+function sendToRenderingThread(threadStream: Float64Array) {
+    self.postMessage(threadStream, [threadStream.buffer])
+}
+
+let threadIdCounter = 0
+
+function generateStreamId(): number {
+    const id = threadIdCounter
+    threadIdCounter++
+    return id
 }
 
 const HANDLER_LOOKUP: Readonly<MainThreadFunctionLookup> = {
-    keyDown(data: Float64Array) {
-        sendToRenderingThread("keyDownResponse", data)
+    [mainThreadCodes.keyDown](stream: Float64Array) {
+        const previousStreamId = getThreadStreamId(stream)
+        setThreadStreamId(stream, generateStreamId())
+        setThreadResponseId(stream, previousStreamId)
+        setThreadHandler(stream, renderingThreadCodes.keyDownResponse)
+        sendToRenderingThread(stream)
     },
-    keyUp(data: Float64Array) {
-        sendToRenderingThread("keyUpResponse", data)
+    [mainThreadCodes.keyUp](stream: Float64Array) {
+        const previousStreamId = getThreadStreamId(stream)
+        setThreadStreamId(stream, generateStreamId())
+        setThreadResponseId(stream, previousStreamId)
+        setThreadHandler(stream, renderingThreadCodes.keyUpResponse)
+        sendToRenderingThread(stream)
     },
-    helperPingAcknowledged(data: Float64Array) {
+    [mainThreadCodes.helperPingAcknowledged](data: Float64Array) {
         const [workerId] = data
         console.log(mainThreadIdentity(), "game helper thread", workerId, "responded to ping")
     },
-    renderingPingAcknowledged(_) {
+    [mainThreadCodes.renderingPingAcknowledged](_) {
         console.log(`${mainThreadIdentity()} rendering thread responded to ping`)
     }
 }
 
-
-
-self.onmessage = function handleRenderingThreadMessage(message: MessageEvent<Data>) {
+self.onmessage = function handleRenderingThreadMessage(message: MessageEvent<Float64Array>) {
     try {
-        const { handler, payload } = message.data
-        HANDLER_LOOKUP[handler](payload)
+        const stream = message.data
+        const handler = getThreadStreamHandler(stream) as MainThreadCodes
+        HANDLER_LOOKUP[handler](stream)
     } catch(err) {
         console.warn(`${mainThreadIdentity()} something went wrong when looking up function, payload`, message.data)
         console.error("error:", err)
@@ -54,8 +78,17 @@ self.onmessageerror = message => {
     )
 }
 
+sendToRenderingThread(
+    renderingThreadStream(
+        renderingThreadCodes.acknowledgePing,
+        generateStreamId()
+    ),
+    
+)
 
-sendToRenderingThread("acknowledgePing", emptyPayload())
 const threadPool = new HelperGameThreadPool({ threadCount: 2 })
 await threadPool.initialize()
+await threadPool.spawnJob(helperGameThreadCodes.acknowledgePing, new Float64Array([1]), (data) => {
+    console.log("hello from data closure", data)
+})
 

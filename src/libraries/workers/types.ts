@@ -1,7 +1,7 @@
 import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
-import { mainThreadCodes } from "./messageCodes/mainThread"
-import { renderingThreadCodes } from "./messageCodes/renderingThread"
-import { helperGameThreadCodes } from "./messageCodes/helperGameThread"
+import { MainThreadCodes } from "./messageCodes/mainThread"
+import { RenderingThreadCodes } from "./messageCodes/renderingThread"
+import { HelperGameThreadCodes } from "./messageCodes/helperGameThread"
 
 export type WebWorkerConstructor = typeof mainGameThreadConstructor
 
@@ -10,8 +10,20 @@ interface ThreadCommunication<TARGET_THREAD_CODES> {
     payload: Float64Array
 }
 
-export type MainThreadMessage = ThreadCommunication<mainThreadCodes>
-export type RenderingThreadMessage = ThreadCommunication<renderingThreadCodes>
-export type HelperGameThreadMessage = ThreadCommunication<helperGameThreadCodes>
+export type MainThreadMessage = ThreadCommunication<MainThreadCodes>
+export type RenderingThreadMessage = ThreadCommunication<RenderingThreadCodes>
+export type HelperGameThreadMessage = ThreadCommunication<HelperGameThreadCodes>
 
 export type ThreadExecutor = (data: Float64Array) => void
+
+const enum x {
+    hello = 1,
+    rand = 12
+}
+
+const xMap = {
+    1: "hello",
+    12: "rand"
+} as const
+
+type xKey = keyof typeof xMap

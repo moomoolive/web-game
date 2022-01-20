@@ -1,12 +1,19 @@
-import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
+import { HelperGameThreadCodes, helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 import { ThreadExecutor, HelperGameThreadMessage as Data } from "@/libraries/workers/types"
-import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
+import { MainThreadCodes, mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { MainThreadMessage } from "@/libraries/workers/types"
 import { helperGameThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
+import { 
+    getThreadStreamHandler,
+    threadSteamPayloadFirst,
+    getThreadStreamId,
+    setThreadStreamId,
+    setThreadHandler,
+    setThreadResponseId
+} from "@/libraries/workers/threadStreams/index"
 
-function sendToMainThread(handler: mainThreadCodes, payload: Float64Array) {
-    const message: MainThreadMessage = { handler, payload }
-    self.postMessage(message, [payload.buffer])
+function sendToMainThread(stream: Float64Array) {
+    self.postMessage(stream, [stream.buffer])
 }
 
 const ID_NOT_DEFINED = -1
@@ -14,6 +21,13 @@ const ID_NOT_DEFINED = -1
 // named with snake case because "workedId" variable name
 // is used in the lookup functions sometimes
 let worker_id = ID_NOT_DEFINED
+let streamIdCounter = 0
+
+function generateStreamId(): number {
+    const id = streamIdCounter
+    streamIdCounter++
+    return id
+}
 
 function debugIdentity(): string {
     const workerTag = worker_id === ID_NOT_DEFINED ? "(id not defined)" : worker_id.toString()
@@ -21,22 +35,27 @@ function debugIdentity(): string {
 }
 
 type HelperGameThreadFunctionLookup = {
-    [key in helperGameThreadCodes]: ThreadExecutor
+    [key in HelperGameThreadCodes]: ThreadExecutor
 }
 
 const HANDLER_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
-    acknowledgePing(data: Float64Array) {
-        const [workerId] = data
-        worker_id = workerId
+    [helperGameThreadCodes.acknowledgePing](stream: Float64Array) {
+        const workerId = threadSteamPayloadFirst(stream)
+        worker_id = workerId ?? ID_NOT_DEFINED
         console.log(`${debugIdentity()} ping acknowledged @`, Date.now())
-        sendToMainThread("helperPingAcknowledged", data)
+        const previousStreamId = getThreadStreamId(stream)
+        setThreadResponseId(stream, previousStreamId)
+        setThreadStreamId(stream, generateStreamId())
+        setThreadHandler(stream, mainThreadCodes.helperPingAcknowledged)
+        sendToMainThread(stream)
     }
 }
 
-self.onmessage = (message: MessageEvent<Data>) => {
+self.onmessage = (message: MessageEvent<Float64Array>) => {
     try {
-        const { handler, payload } = message.data
-        HANDLER_LOOKUP[handler](payload)
+        const stream = message.data
+        const handler = getThreadStreamHandler(stream) as HelperGameThreadCodes
+        HANDLER_LOOKUP[handler](stream) 
     } catch(err) {
         console.warn(`${debugIdentity()} something went wrong when looking up function, payload`, message.data)
         console.error("error:", err)

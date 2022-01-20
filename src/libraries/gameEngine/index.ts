@@ -6,7 +6,10 @@ import { Player } from "./player"
 import { MILLISECONDS_IN_SECOND } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
 import { MainGameThread } from "@/libraries/workers/workerTypes/index"
-import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
+import { 
+    RenderingThreadCodes,
+    renderingThreadCodes 
+} from "@/libraries/workers/messageCodes/renderingThread"
 import { ThreadExecutor } from "@/libraries/workers/types"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
 import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
@@ -19,11 +22,16 @@ import {
     createWorldPlane,
     EngineIndicator
 } from "./utils/initialization"
+import { 
+    getThreadStreamId, 
+    getThreadStreamHandler,
+    threadSteamPayloadFirst 
+} from "@/libraries/workers/threadStreams/index"
 
 const HAS_NOT_RENDERED_YET = -1
 
 type RenderingThreadFunctionLookup = {
-    [key in renderingThreadCodes]: ThreadExecutor
+    [key in RenderingThreadCodes]: ThreadExecutor
 }
 
 interface GameOptions {
@@ -109,25 +117,27 @@ export function createGame(options: GameOptions): Game {
         .catch(err => console.error(renderingThreadIdentity(), "ASSET_LOADING_ERROR:", err))
     
     const HANDLER_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
-        keyDownResponse(data: Float64Array) {
-            const [keyCode] = data
+        [renderingThreadCodes.keyDownResponse](stream: Float64Array) {
+            const keyCode = threadSteamPayloadFirst(stream)
             player.onKeyDown(keyCode)
         },
-        keyUpResponse(data: Float64Array) {
-            const [keyCode] = data
+        [renderingThreadCodes.keyUpResponse](stream: Float64Array) {
+            const keyCode = threadSteamPayloadFirst(stream)
             player.onKeyUp(keyCode)
         },
-        acknowledgePing(_: Float64Array) {
+        [renderingThreadCodes.acknowledgePing](stream: Float64Array) {
             console.log(renderingThreadIdentity(), "ping acknowledged @", Date.now())
             mainEngineIndicator.setReady()
-            mainThread.renderingPingAcknowledged()
+            const streamId = getThreadStreamId(stream)
+            mainThread.renderingPingAcknowledged(streamId)
         }
     }
 
     mainThread.setOnMessageHandler(message => {
         try {
-            const { handler, payload } = message.data
-            HANDLER_LOOKUP[handler](payload)
+            const stream = message.data
+            const handler = getThreadStreamHandler(stream) as RenderingThreadCodes
+            HANDLER_LOOKUP[handler](stream)
         } catch(err) {
             console.warn(renderingThreadIdentity(), "something went wrong when looking up function, payload", message.data)
             console.error("error:", err)
