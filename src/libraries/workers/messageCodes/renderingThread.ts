@@ -4,10 +4,10 @@ export const enum renderingThreadCodes {
     acknowledgePing = 10_002
 }
 
-export const renderingThreadReverseMap = {
+export const renderingThreadCodesReverseMap = {
     10_000: "keyDownResponse",
     10_001: "keyUpResponse",
     10_002: "acknowledgePing"
 }
 
-export type RenderingThreadCodes = keyof typeof renderingThreadReverseMap
+export type RenderingThreadCodes = keyof typeof renderingThreadCodesReverseMap

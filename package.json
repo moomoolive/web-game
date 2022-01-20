@@ -9,6 +9,8 @@
     "build": "vite build",
     "dev": "vite",
     "test:unit": "jest",
+    "dev-tools:generate-message-code-reverse-maps": "node ./src/libraries/workers/messageCodes/generateReverseMaps.js",
+    "dev-tools:reverse-maps": "npm run dev-tools:generate-message-code-reverse-maps",
     "ci": "npm i && npm run test:unit"
   },
   "lint-staged": {
