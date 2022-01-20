@@ -13,10 +13,6 @@ import {
 import { renderingThreadStream } from "@/libraries/workers/threadStreams/streamCreators"
 import { HelperGameThreadPool } from "@/libraries/workers/threadTypes/helperGameThreadPool"
 
-type MainThreadFunctionLookup = {
-    [key in MainThreadCodes]: ThreadExecutor
-}
-
 function sendToRenderingThread(threadStream: Float64Array) {
     self.postMessage(threadStream, [threadStream.buffer])
 }
@@ -27,6 +23,10 @@ function generateStreamId(): number {
     const id = threadIdCounter
     threadIdCounter++
     return id
+}
+
+type MainThreadFunctionLookup = {
+    [key in MainThreadCodes]: ThreadExecutor
 }
 
 const HANDLER_LOOKUP: Readonly<MainThreadFunctionLookup> = {
