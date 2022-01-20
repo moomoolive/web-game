@@ -8,9 +8,9 @@ const THREAD_CODES_ENUM_TOKEN_START = "const enum"
 const allFilesInCurrentDirectory = fs.readdirSync(__dirname)
 const targetFiles = allFilesInCurrentDirectory.filter(name => name !== CURRENT_FILE_NAME)
 
-console.log("🖥️  generating reverse maps and reverse map union types based on thread codes...")
+console.log("🖥️  generating reverse maps and reverse map union types based on thread codes...\n")
 
-for (const filename in targetFiles) {
+for (const filename of targetFiles) {
     const filePath = path.join(__dirname, "/" + filename)
     const fileString = fs.readFileSync(filePath, { encoding: "utf8" })
 
@@ -24,13 +24,20 @@ for (const filename in targetFiles) {
     const [junk, stringWithEnums] = fileString.split(THREAD_CODES_ENUM_TOKEN_START)
     const [enumToken, junk2] = stringWithEnums.split("}")
     const [enumIdentifer, enumValues] = enumToken.split("{")
-    const allEnumsListed = enumValues.split(",")
+    const allEnumsListed = enumValues.split(",").filter(str => str.length > 1)
     const allEnumsListedWithoutWhiteSpace = allEnumsListed.map(enumValue => {
         return enumValue.replace(/(\s+|{|})/gmi, "")
     })
     const enumKeyValuePairs = allEnumsListedWithoutWhiteSpace.map(enumPair => {
         const [key, value] = enumPair.split("=")
-        return { key, value: parseInt(value) }
+        const notNumber = isNaN(parseFloat(value))
+        if (notNumber) {
+            const msg = "rendering codes can only be numbers " + filename +
+                " contains non number const enum:\n\nerror on: { enumName:'" + key + "', value: " +
+                value + " }"
+            throw new Error(msg)
+        }
+        return { key, value }
     })
 
     const enumIdentiferClean = enumIdentifer.trim()
@@ -51,7 +58,7 @@ for (const filename in targetFiles) {
 
     const outputPath = path.join(__dirname, filename)
     fs.writeFileSync(outputPath, output)
-    console.log("\n📁", filename, "finished")
+    console.log("📁", filename, "finished")
 }
 
 console.log("\n✅ all done")
