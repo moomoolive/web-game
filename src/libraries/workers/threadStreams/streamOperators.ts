@@ -21,6 +21,10 @@ export function setThreadResponseId(threadStream: Float64Array, newId: number) {
     threadStream[THREAD_STREAM_RESPONSE_ID_INDEX] = newId
 }
 
+export function getThreadResponseId(threadStream: Float64Array): number {
+    return threadStream[THREAD_STREAM_RESPONSE_ID_INDEX]
+}
+
 export function setThreadHandler(threadSteam: Float64Array, newHandler: number) {
     threadSteam[THREAD_STREAM_HANDLER_INDEX] = newHandler
 }
@@ -37,4 +41,12 @@ export function mapThreadStream(threadStream: Float64Array, handler: (input: num
         threadStream[i] = handler(threadStream[i])
     }
     return threadStream
+}
+
+export function duplicateThreadStreamPayload(threadStream: Float64Array): Float64Array {
+    if (!threadStream[PAYLOAD_START_INDEX]) {
+        return new Float64Array()
+    } else {
+        return threadStream.slice(PAYLOAD_START_INDEX)
+    }
 }

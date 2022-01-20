@@ -27,6 +27,7 @@ import {
     getThreadStreamHandler,
     threadSteamPayloadFirst 
 } from "@/libraries/workers/threadStreams/streamOperators"
+import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
 
 const HAS_NOT_RENDERED_YET = -1
 
@@ -134,12 +135,13 @@ export function createGame(options: GameOptions): Game {
     }
 
     mainThread.setOnMessageHandler(message => {
+        const stream = message.data
         try {
-            const stream = message.data
             const handler = getThreadStreamHandler(stream) as RenderingThreadCodes
             HANDLER_LOOKUP[handler](stream)
         } catch(err) {
-            console.warn(renderingThreadIdentity(), "something went wrong when looking up function, payload", message.data)
+            console.warn(renderingThreadIdentity(), "something went wrong when looking up function")
+            console.warn("stream debug:", streamDebugInfo(stream, "main-thread"))
             console.error("error:", err)
         }
     })

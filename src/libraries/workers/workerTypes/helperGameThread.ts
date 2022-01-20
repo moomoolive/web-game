@@ -10,6 +10,7 @@ import {
     setThreadHandler,
     setThreadResponseId
 } from "@/libraries/workers/threadStreams/streamOperators"
+import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
 
 function sendToMainThread(stream: Float64Array) {
     self.postMessage(stream, [stream.buffer])
@@ -51,12 +52,13 @@ const HANDLER_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
 }
 
 self.onmessage = (message: MessageEvent<Float64Array>) => {
+    const stream = message.data
     try {
-        const stream = message.data
         const handler = getThreadStreamHandler(stream) as HelperGameThreadCodes
         HANDLER_LOOKUP[handler](stream) 
     } catch(err) {
-        console.warn(`${debugIdentity()} something went wrong when looking up function, payload`, message.data)
+        console.warn(`${debugIdentity()} something went wrong when looking up function, payload`)
+        console.warn("stream debug:", streamDebugInfo(stream, "main-thread"))
         console.error("error:", err)
     }
 }

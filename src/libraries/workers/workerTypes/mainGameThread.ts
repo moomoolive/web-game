@@ -12,6 +12,7 @@ import {
 } from "@/libraries/workers/threadStreams/streamOperators"
 import { renderingThreadStream } from "@/libraries/workers/threadStreams/streamCreators"
 import { HelperGameThreadPool } from "@/libraries/workers/threadTypes/helperGameThreadPool"
+import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
 
 function sendToRenderingThread(threadStream: Float64Array) {
     self.postMessage(threadStream, [threadStream.buffer])
@@ -54,12 +55,13 @@ const HANDLER_LOOKUP: Readonly<MainThreadFunctionLookup> = {
 }
 
 self.onmessage = function handleRenderingThreadMessage(message: MessageEvent<Float64Array>) {
+    const stream = message.data
     try {
-        const stream = message.data
         const handler = getThreadStreamHandler(stream) as MainThreadCodes
         HANDLER_LOOKUP[handler](stream)
     } catch(err) {
-        console.warn(`${mainThreadIdentity()} something went wrong when looking up function, payload`, message.data)
+        console.warn(`${mainThreadIdentity()} something went wrong when looking up function`)
+        console.warn("stream debug:", streamDebugInfo(stream, "rendering-thread"))
         console.error("error:", err)
     }
 }
@@ -87,6 +89,6 @@ sendToRenderingThread(
 const threadPool = new HelperGameThreadPool({ threadCount: 2 })
 await threadPool.initialize()
 await threadPool.spawnJob(helperGameThreadCodes.acknowledgePing, new Float64Array([1]), (data) => {
-    console.log("hello from data closure", data)
+    console.log("hello from data closure")
 })
 

@@ -9,6 +9,7 @@ import { sleepSeconds } from "@/libraries/misc"
 import { 
     helperGameThreadStreamWithPayload 
 } from "@/libraries/workers/threadStreams/streamCreators"
+import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
 
 let streamCounterId = 0
 
@@ -108,10 +109,9 @@ export class HelperGameThreadPool {
                 console.error(
                     mainThreadIdentity(),
                     "error occur when recieving message from game helper thread", 
-                    workerId, 
-                    ", message:", 
-                    message
+                    workerId
                 )
+                console.error("stream debug", streamDebugInfo(message.data, "helper-thread"))
                 reject()
                 this.threadWaitingIndicators[workerId] = THREAD_CANNOT_DO_WORK
             }
@@ -187,10 +187,9 @@ export class HelperGameThreadPool {
                 console.error(
                     mainThreadIdentity(),
                     "error occur when recieving message from game helper thread", 
-                    workerId, 
-                    ", message:", 
-                    message
+                    workerId
                 )
+                console.error("stream debug", streamDebugInfo(message.data, "helper-thread"))
                 reject()
                 threadWaitingIndicators[workerId] = false
             }
@@ -269,10 +268,9 @@ export class HelperGameThreadPool {
                 console.error(
                     mainThreadIdentity(),
                     "error occur when recieving message from game helper thread", 
-                    lastAvailableThreadIndex, 
-                    ", message:", 
-                    message
+                    lastAvailableThreadIndex
                 )
+                console.error("stream debug", streamDebugInfo(message.data, "helper-thread"))
                 reject()
                 threadWaitingIndicators[lastAvailableThreadIndex] = false
             }
