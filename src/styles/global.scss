@@ -1,0 +1,30 @@
+@import "./variables.scss";
+
+html, body {
+    background: $app-background;
+}
+
+$grey: #404040;
+
+// Chrome, Safari, and Edge scrollbar
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: $grey;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: $grey;
+}
+
+// Firefox scrollbar
+* {
+    scrollbar-width: thin;
+    scrollbar-color: $grey transparent;
+}

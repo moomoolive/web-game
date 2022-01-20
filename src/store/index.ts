@@ -1,7 +1,19 @@
 import { InjectionKey } from 'vue'
-import { createStore, Store } from 'vuex'
+import { createStore, Store, useStore as baseUseStore } from 'vuex'
 
-interface storeTypes {}
-export const key: InjectionKey<Store<storeTypes>> = Symbol()
+import { RootState } from "./types"
+import { confirmStore } from './modules/confirm'
+import { DeviceSpecsStore } from './modules/device'
 
-export const store = createStore<storeTypes>({})
+export const key: InjectionKey<Store<RootState>> = Symbol()
+
+export const store = createStore<RootState>({
+    modules: {
+        confirm: confirmStore,
+        device: DeviceSpecsStore
+    }
+})
+
+export function useStore(): Store<RootState> {
+    return baseUseStore(key)
+}
