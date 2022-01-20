@@ -1,19 +1,17 @@
-import { MainThreadMessage as Data, ThreadExecutor, RenderingThreadMessage } from "@/libraries/workers/types"
+import { ThreadExecutor } from "@/libraries/workers/types"
 import { MainThreadCodes, mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
-import { RenderingThreadCodes, renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
-import { HelperGameThreadPool } from "@/libraries/workers/workerTypes/index"
+import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
-import { emptyPayload } from "@/libraries/workers/common/index"
 import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 import { 
-    renderingThreadStream, 
-    renderingThreadStreamWithPayload,
     getThreadStreamHandler,
     setThreadStreamId,
     getThreadStreamId,
     setThreadResponseId,
     setThreadHandler,
-} from "@/libraries/workers/threadStreams/index"
+} from "@/libraries/workers/threadStreams/streamOperators"
+import { renderingThreadStream } from "@/libraries/workers/threadStreams/streamCreators"
+import { HelperGameThreadPool } from "@/libraries/workers/threadTypes/helperGameThreadPool"
 
 type MainThreadFunctionLookup = {
     [key in MainThreadCodes]: ThreadExecutor

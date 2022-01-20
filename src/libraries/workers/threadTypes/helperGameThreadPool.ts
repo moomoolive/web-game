@@ -2,88 +2,20 @@
 // by the vite-plugin-worker
 // typescript definitions for these modules made possible by tsconfig.json
 // module alias section
-import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
-import { 
-    MainThreadCodes,
-    mainThreadCodes
-} from "@/libraries/workers/messageCodes/mainThread"
-import { HelperGameThreadCodes, helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 import helperGameThreadConstructor from "worker:@/libraries/workers/workerTypes/helperGameThread"
-import { renderingThreadIdentity, mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
+import { HelperGameThreadCodes, helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
+import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { sleepSeconds } from "@/libraries/misc"
 import { 
-    mainThreadStreamFull,
-    mainThreadStreamWithPayload,
-    helperGameThreadStreamWithPayload
-} from "@/libraries/workers/threadStreams/index"
+    helperGameThreadStreamWithPayload 
+} from "@/libraries/workers/threadStreams/streamCreators"
 
-export class MainGameThread {
-    private worker = mainGameThreadConstructor()
-    private threadIdCounter = 0
+let streamCounterId = 0
 
-    constructor() {
-        this.worker.onerror = (err: ErrorEvent) => {
-            console.error(renderingThreadIdentity(), " fatal error occurred on main thread, error:", err)
-        }
-
-        this.worker.onmessageerror = err => {
-            console.error(
-                renderingThreadIdentity(),
-                "error occur when recieving message from main thread, error:", 
-                err
-            )
-        }
-    }
-
-    terminate() {
-        this.worker.terminate()
-    }
-
-    generateThreadId(): number {
-        const id = this.threadIdCounter
-        this.threadIdCounter++
-        return id
-    }
-
-    setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
-        this.worker.onerror = handler
-    }
-
-    setOnMessageHandler(handler: (message: MessageEvent<Float64Array>) => void) {
-        this.worker.onmessage = handler 
-    }
-
-    postMessage(threadStream: Float64Array) {
-        // pass payload by reference
-        this.worker.postMessage(threadStream, [threadStream.buffer])
-    }
-
-    notifyKeyDown(event: KeyboardEvent) {
-        const stream = mainThreadStreamWithPayload(
-            mainThreadCodes.keyDown,
-            this.generateThreadId(),
-            new Float64Array([event.keyCode])
-        )
-        this.postMessage(stream)
-    }
-
-    notifyKeyUp(event: KeyboardEvent) {
-        const stream = mainThreadStreamWithPayload(
-            mainThreadCodes.keyUp,
-            this.generateThreadId(),
-            new Float64Array([event.keyCode])
-        )
-        this.postMessage(stream)
-    }
-
-    renderingPingAcknowledged(pingStreamId: number) {
-        const stream = mainThreadStreamFull(
-            mainThreadCodes.renderingPingAcknowledged,
-            this.generateThreadId(),
-            pingStreamId
-        )
-        this.postMessage(stream)
-    }
+function generateStreamId(): number {
+    const id = streamCounterId
+    streamCounterId++
+    return id
 }
 
 interface ThreadPoolOptions {
@@ -99,7 +31,6 @@ export class HelperGameThreadPool {
     private threadWaitingIndicators: boolean[] = []
     private requestedThreads = 0
     private endOfReadyThreads = 0
-    private streamIdCounter = 0
 
     constructor(options: ThreadPoolOptions) {
         if (options.threadCount < 1) {
@@ -114,12 +45,6 @@ export class HelperGameThreadPool {
 
     threadCount(): Readonly<number> {
         return this.threadPool.length
-    }
-
-    generateStreamId(): number {
-        const id = this.streamIdCounter
-        this.streamIdCounter++
-        return id
     }
 
     private spawnPool() {
@@ -204,7 +129,7 @@ export class HelperGameThreadPool {
             }
             const stream = helperGameThreadStreamWithPayload(
                 helperGameThreadCodes.acknowledgePing,
-                this.generateStreamId(),
+                generateStreamId(),
                 new Float64Array([workerId])
             )
             thread.postMessage(stream, [stream.buffer])
@@ -283,7 +208,7 @@ export class HelperGameThreadPool {
             }
             const stream = helperGameThreadStreamWithPayload(
                 handler,
-                this.generateStreamId(),
+                generateStreamId(),
                 payload
             )
             thread.postMessage(stream, [stream.buffer])
@@ -365,7 +290,7 @@ export class HelperGameThreadPool {
             }
             const stream = helperGameThreadStreamWithPayload(
                 handler,
-                this.generateStreamId(),
+                generateStreamId(),
                 payload
             )
             thread.postMessage(stream, [stream.buffer])

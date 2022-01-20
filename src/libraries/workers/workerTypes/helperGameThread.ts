@@ -1,7 +1,6 @@
 import { HelperGameThreadCodes, helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
-import { ThreadExecutor, HelperGameThreadMessage as Data } from "@/libraries/workers/types"
-import { MainThreadCodes, mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
-import { MainThreadMessage } from "@/libraries/workers/types"
+import { ThreadExecutor } from "@/libraries/workers/types"
+import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { helperGameThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { 
     getThreadStreamHandler,
@@ -10,7 +9,7 @@ import {
     setThreadStreamId,
     setThreadHandler,
     setThreadResponseId
-} from "@/libraries/workers/threadStreams/index"
+} from "@/libraries/workers/threadStreams/streamOperators"
 
 function sendToMainThread(stream: Float64Array) {
     self.postMessage(stream, [stream.buffer])
@@ -66,6 +65,6 @@ self.onerror = err => {
     console.error(`${debugIdentity()} fatal error encountered, error:`, err)
 }
 
-self.onmessageerror = (message: MessageEvent<Data>) => {
+self.onmessageerror = (message: MessageEvent<Float64Array>) => {
     console.error(`${debugIdentity()} error occurred when recieving message from main thread, message:`, message)
 }

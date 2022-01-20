@@ -5,7 +5,7 @@ import { Ref, ref } from "vue"
 import { Player } from "./player"
 import { MILLISECONDS_IN_SECOND } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
-import { MainGameThread } from "@/libraries/workers/workerTypes/index"
+import { MainGameThread } from "@/libraries/workers/threadTypes/mainGameThread"
 import { 
     RenderingThreadCodes,
     renderingThreadCodes 
@@ -26,7 +26,7 @@ import {
     getThreadStreamId, 
     getThreadStreamHandler,
     threadSteamPayloadFirst 
-} from "@/libraries/workers/threadStreams/index"
+} from "@/libraries/workers/threadStreams/streamOperators"
 
 const HAS_NOT_RENDERED_YET = -1
 
