@@ -7,9 +7,11 @@ import { HelperGameThreadCodes, helperGameThreadCodes } from "@/libraries/worker
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { sleepSeconds } from "@/libraries/misc"
 import { 
-    helperGameThreadStreamWithPayload 
+    helperGameThreadStreamWithPayload,
 } from "@/libraries/workers/threadStreams/streamCreators"
 import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
+import { getThreadStreamHandler } from "@/libraries/workers/threadStreams/streamOperators"
+import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 
 let streamCounterId = 0
 
@@ -26,7 +28,7 @@ interface ThreadPoolOptions {
 // can only be used inside a worker file
 export class HelperGameThreadPool {
     private static MAXIMUM_THREADS = navigator.hardwareConcurrency
-    private static MAX_PING_TIMEOUT_SECONDS = 2
+    private static MAX_PING_TIMEOUT_SECONDS = 1
 
     private threadPool: Worker[] = []
     private threadWaitingIndicators: boolean[] = []
@@ -94,7 +96,12 @@ export class HelperGameThreadPool {
         const THREAD_IS_READY_FOR_WORK = false
         const THREAD_CANNOT_DO_WORK = true
         return new Promise((resolve, reject) => {
-            thread.onmessage = () => {
+            thread.onmessage = (message: MessageEvent<Float64Array>) => {
+                const handler = getThreadStreamHandler(message.data)
+                /* if returned with error, allow thread to timeout */
+                if (handler === mainThreadCodes.jobCouldNotComplete) {
+                    return
+                }
                 console.log(
                     mainThreadIdentity(), 
                     "game helper thread", 
@@ -137,11 +144,14 @@ export class HelperGameThreadPool {
     }
 
     async initialize(): Promise<void> {
-        this.threadPool.forEach((_, index) => this.pingThread(index))
+        const threadPool = this.threadPool
+        const threadWaitingIndicators = this.threadWaitingIndicators
+
+        threadPool.forEach((_, index) => this.pingThread(index))
         await sleepSeconds(HelperGameThreadPool.MAX_PING_TIMEOUT_SECONDS)
 
-        for (let i = this.threadWaitingIndicators.length - 1; i >= 0; i--) {
-            const notWaiting = !this.threadWaitingIndicators[i]
+        for (let i = threadWaitingIndicators.length - 1; i >= 0; i--) {
+            const notWaiting = !threadWaitingIndicators[i]
             if (notWaiting) {
                 continue
             }
@@ -153,18 +163,18 @@ export class HelperGameThreadPool {
                 i, 
                 "didn't respond to initalization ping. Removing from thread pool"
             )
-            this.threadPool[i].terminate()
-            this.threadPool.splice(i, 1)
-            this.threadWaitingIndicators.splice(i, 1)
+            threadPool[i].terminate()
+            threadPool.splice(i, 1)
+            threadWaitingIndicators.splice(i, 1)
         }
 
-        if (this.threadPool.length < 1) {
+        if (threadPool.length < 1) {
             console.warn(
                 mainThreadIdentity(),
                 "no threads have been correctly initialized"
             )
         }
-        this.endOfReadyThreads = this.threadPool.length    
+        this.endOfReadyThreads = threadPool.length    
     }
 
     private createJob(
@@ -179,7 +189,18 @@ export class HelperGameThreadPool {
         threadWaitingIndicators[workerId] = true
         return new Promise((resolve, reject) => {
             thread.onmessage = (message: MessageEvent<Float64Array>) => {
-                resolve(message.data)
+                const handler = getThreadStreamHandler(message.data)
+                if (handler === mainThreadCodes.jobCouldNotComplete) {
+                    /* 
+                        temporary solution,
+                        what should probably happen is another retry,
+                        or have this thread complete the work that 
+                        the helper thread couldn't complete? 
+                    */
+                    reject()
+                } else {
+                    resolve(message.data)
+                }
                 threadWaitingIndicators[workerId] = false
             }
 
@@ -259,6 +280,16 @@ export class HelperGameThreadPool {
         const thread = this.threadPool[lastAvailableThreadIndex]
         return new Promise((resolve, reject) => {
             thread.onmessage = (message: MessageEvent<Float64Array>) => {
+                const handler = getThreadStreamHandler(message.data)
+                if (handler === mainThreadCodes.jobCouldNotComplete) {
+                    /* 
+                        temporary solution,
+                        what should probably happen is another retry,
+                        or have this thread complete the work that 
+                        the helper thread couldn't complete? 
+                    */
+                    reject()
+                }
                 onComplete(message.data)
                 resolve()
                 threadWaitingIndicators[lastAvailableThreadIndex] = false

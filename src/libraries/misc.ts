@@ -1,6 +1,6 @@
 import { WEBGL } from "three/examples/jsm/WebGL.js"
 
-import { MILLISECONDS_IN_SECOND } from "@/consts"
+import { globals } from "@/consts"
 
 export function webAssemblyIsSupported(): boolean {
     try {
@@ -40,7 +40,7 @@ export function deviceIsCompatible(): boolean {
 
 export async function sleepSeconds(seconds: number): Promise<boolean> {
     return new Promise(resolve => {
-        setTimeout(() => resolve(true), seconds * MILLISECONDS_IN_SECOND)
+        setTimeout(() => resolve(true), seconds * globals.MILLISECONDS_IN_SECOND)
     })
 }
 export type DeviceType = "mobile" | "desktop" | "console" | "tablet"

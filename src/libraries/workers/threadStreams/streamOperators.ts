@@ -33,6 +33,13 @@ export function threadSteamPayloadFirst(threadStream: Float64Array): number {
     return threadStream[PAYLOAD_START_INDEX]
 } 
 
+export function samePayloadResponseThreadStream(newHandler: number, newId: number, threadStream: Float64Array) {
+    const previousStreamId = getThreadStreamId(threadStream)
+    setThreadResponseId(threadStream, previousStreamId)
+    setThreadStreamId(threadStream, newId)
+    setThreadHandler(threadStream, newHandler)
+}
+
 export function mapThreadStream(threadStream: Float64Array, handler: (input: number) => number): Float64Array {
     if (!threadStream[PAYLOAD_START_INDEX]) {
         throw new Error("THREAD_STREAM_PROCESS_ERROR: payload does not exist")

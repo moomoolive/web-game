@@ -8,10 +8,10 @@ import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIden
 import { 
     mainThreadStreamFull,
     mainThreadStreamWithPayload,
+    mainThreadStreamFullWithPayload
 } from "@/libraries/workers/threadStreams/streamCreators"
 
 let threadIdCounter = 0
-
 function generateThreadId(): number {
     let id = threadIdCounter
     threadIdCounter++
@@ -39,6 +39,18 @@ export class MainGameThread {
         this.worker.terminate()
     }
 
+    restart() {
+        console.log(renderingThreadIdentity(), "⚡restarting main thread...")
+        const previousOnMessage = this.worker.onmessage
+        const previousOnError = this.worker.onerror
+        const previousOnMessageError = this.worker.onmessageerror
+        this.worker.terminate()
+        this.worker = mainGameThreadConstructor()
+        this.worker.onmessage = previousOnMessage
+        this.worker.onerror = previousOnError
+        this.worker.onmessageerror = previousOnMessageError 
+    }
+
     setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
         this.worker.onerror = handler
     }
@@ -47,7 +59,7 @@ export class MainGameThread {
         this.worker.onmessage = handler 
     }
 
-    postMessage(threadStream: Float64Array) {
+    private postMessage(threadStream: Float64Array) {
         // pass payload by reference
         this.worker.postMessage(threadStream, [threadStream.buffer])
     }
@@ -70,11 +82,21 @@ export class MainGameThread {
         this.postMessage(stream)
     }
 
-    renderingPingAcknowledged(pingStreamId: number) {
-        const stream = mainThreadStreamFull(
+    renderingPingAcknowledged(pingStreamId: number, gameOptionsStream: Float64Array) {
+        const stream = mainThreadStreamFullWithPayload(
             mainThreadCodes.renderingPingAcknowledged,
             generateThreadId(),
-            pingStreamId
+            pingStreamId,
+            gameOptionsStream
+        )
+        this.postMessage(stream)
+    }
+
+    prepareForRestart(fatalErrorNoticeStreamId: number) {
+        const stream = mainThreadStreamFull(
+            mainThreadCodes.prepareForRestart,
+            generateThreadId(),
+            fatalErrorNoticeStreamId
         )
         this.postMessage(stream)
     }

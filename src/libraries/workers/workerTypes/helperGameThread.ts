@@ -5,34 +5,29 @@ import { helperGameThreadIdentity } from "@/libraries/workers/devTools/threadIde
 import { 
     getThreadStreamHandler,
     threadSteamPayloadFirst,
-    getThreadStreamId,
-    setThreadStreamId,
-    setThreadHandler,
-    setThreadResponseId
+    samePayloadResponseThreadStream
 } from "@/libraries/workers/threadStreams/streamOperators"
 import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
-
-function sendToMainThread(stream: Float64Array) {
-    self.postMessage(stream, [stream.buffer])
-}
+import {
+    sendToMainThread,
+    generateStreamId,
+    workerErrorHandler,
+    workerMessageErrorHandler
+} from "@/libraries/workers/workerComponents/common"
 
 const ID_NOT_DEFINED = -1
 
 // named with snake case because "workedId" variable name
 // is used in the lookup functions sometimes
 let worker_id = ID_NOT_DEFINED
-let streamIdCounter = 0
-
-function generateStreamId(): number {
-    const id = streamIdCounter
-    streamIdCounter++
-    return id
-}
 
 function debugIdentity(): string {
     const workerTag = worker_id === ID_NOT_DEFINED ? "(id not defined)" : worker_id.toString()
     return helperGameThreadIdentity(workerTag)
 }
+
+self.onerror = workerErrorHandler(debugIdentity)
+self.onmessage = workerMessageErrorHandler(debugIdentity, "main-thread")
 
 type HelperGameThreadFunctionLookup = {
     [key in HelperGameThreadCodes]: ThreadExecutor
@@ -43,10 +38,11 @@ const HANDLER_LOOKUP: Readonly<HelperGameThreadFunctionLookup> = {
         const workerId = threadSteamPayloadFirst(stream)
         worker_id = workerId ?? ID_NOT_DEFINED
         console.log(`${debugIdentity()} ping acknowledged @`, Date.now())
-        const previousStreamId = getThreadStreamId(stream)
-        setThreadResponseId(stream, previousStreamId)
-        setThreadStreamId(stream, generateStreamId())
-        setThreadHandler(stream, mainThreadCodes.helperPingAcknowledged)
+        samePayloadResponseThreadStream(
+            mainThreadCodes.helperPingAcknowledged,
+            generateStreamId(),
+            stream
+        )
         sendToMainThread(stream)
     }
 }
@@ -57,16 +53,15 @@ self.onmessage = (message: MessageEvent<Float64Array>) => {
         const handler = getThreadStreamHandler(stream) as HelperGameThreadCodes
         HANDLER_LOOKUP[handler](stream) 
     } catch(err) {
-        console.warn(`${debugIdentity()} something went wrong when looking up function, payload`)
+        console.warn(`${debugIdentity()} something went wrong when looking up function`)
         console.warn("stream debug:", streamDebugInfo(stream, "main-thread"))
-        console.error("error:", err)
+        /* send back to main thread to deal with error */
+        console.error(debugIdentity(), err)
+        samePayloadResponseThreadStream(
+            mainThreadCodes.jobCouldNotComplete,
+            generateStreamId(),
+            stream
+        )
+        sendToMainThread(stream)
     }
-}
-
-self.onerror = err => {
-    console.error(`${debugIdentity()} fatal error encountered, error:`, err)
-}
-
-self.onmessageerror = (message: MessageEvent<Float64Array>) => {
-    console.error(`${debugIdentity()} error occurred when recieving message from main thread, message:`, message)
 }

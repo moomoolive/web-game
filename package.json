@@ -10,7 +10,7 @@
     "dev": "vite",
     "test:unit": "jest",
     "dev-tools:generate-message-code-reverse-maps": "node ./src/libraries/workers/messageCodes/generateReverseMaps.js",
-    "dev-tools:reverse-maps": "npm run dev-tools:generate-message-code-reverse-maps",
+    "dev-tools:r-maps": "npm run dev-tools:generate-message-code-reverse-maps",
     "ci": "npm i && npm run test:unit"
   },
   "lint-staged": {
@@ -24,6 +24,7 @@
     "@fortawesome/free-solid-svg-icons": "^5.15.4",
     "@fortawesome/vue-fontawesome": "^3.0.0-5",
     "@mdi/font": "5.9.55",
+    "dexie": "^3.2.0",
     "roboto-fontface": "*",
     "stats.js": "^0.17.0",
     "three": "^0.136.0",

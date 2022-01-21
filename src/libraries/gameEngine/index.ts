@@ -3,7 +3,7 @@ import Stats from "stats.js"
 import { Ref, ref } from "vue"
 
 import { Player } from "./player"
-import { MILLISECONDS_IN_SECOND } from "@/consts"
+import { globals } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
 import { MainGameThread } from "@/libraries/workers/threadTypes/mainGameThread"
 import { 
@@ -28,6 +28,7 @@ import {
     threadSteamPayloadFirst 
 } from "@/libraries/workers/threadStreams/streamOperators"
 import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
+import { createGameEngineOptions, EngineOptions } from "./inputOptions/index"
 
 const HAS_NOT_RENDERED_YET = -1
 
@@ -80,13 +81,6 @@ export function createGame(options: GameOptions): Game {
     const mainEngineIndicator = new EngineIndicator()
 
     const mainThread = new MainGameThread()
-    mainThread.setFatalErrorHandler(err => {
-        console.error(
-            renderingThreadIdentity(), 
-            "fatal error occurred on main thread, error:", 
-            err
-        )
-    })
 
     const showMenu = ref(false)
     // debug tools
@@ -117,6 +111,10 @@ export function createGame(options: GameOptions): Game {
         })
         .catch(err => console.error(renderingThreadIdentity(), "ASSET_LOADING_ERROR:", err))
     
+    const engineOptions: EngineOptions = {
+        loadFromCrash: false
+    }
+
     const HANDLER_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
         [renderingThreadCodes.keyDownResponse](stream: Float64Array) {
             const keyCode = threadSteamPayloadFirst(stream)
@@ -130,8 +128,23 @@ export function createGame(options: GameOptions): Game {
             console.log(renderingThreadIdentity(), "ping acknowledged @", Date.now())
             mainEngineIndicator.setReady()
             const streamId = getThreadStreamId(stream)
-            mainThread.renderingPingAcknowledged(streamId)
+            const options = createGameEngineOptions(engineOptions)
+            mainThread.renderingPingAcknowledged(streamId, options)
+            if (engineOptions.loadFromCrash) {
+                engineOptions.loadFromCrash = false
+            }
+        },
+        [renderingThreadCodes.respondToFatalError](_) {
+            /* tell user about error */
+            console.warn(renderingThreadIdentity(), "main thread has encountered fatal error, preparing for restart...")
+            mainThread.prepareForRestart(2)
+            engineOptions.loadFromCrash = true
+        },
+        [renderingThreadCodes.readyForRestart](_) {
+            console.log(renderingThreadIdentity(),"⚡recieved restart confirmation")
+            mainThread.restart()
         }
+
     }
 
     mainThread.setOnMessageHandler(message => {
@@ -147,10 +160,16 @@ export function createGame(options: GameOptions): Game {
     })
 
     function onKeyDown(event: KeyboardEvent) {
+        if (event.repeat) {
+            return
+        }
         mainThread.notifyKeyDown(event)
     }
 
     function onKeyUp(event: KeyboardEvent) {
+        if (event.repeat) {
+            return
+        }
         mainThread.notifyKeyUp(event)
     }
 
@@ -162,7 +181,7 @@ export function createGame(options: GameOptions): Game {
 
     // rename or remove?
     function updateEntities(timeElaspsedMilliseconds: number) {
-        const timeElapsedSeconds = timeElaspsedMilliseconds / MILLISECONDS_IN_SECOND
+        const timeElapsedSeconds = timeElaspsedMilliseconds / globals.MILLISECONDS_IN_SECOND
         player.update(timeElapsedSeconds)
     }
 
@@ -197,7 +216,7 @@ export function createGame(options: GameOptions): Game {
         },
         async initialize(): Promise<void> {
             try {
-                await mainEngineIndicator.awaitReadySignal()
+                //await mainEngineIndicator.awaitReadySignal()
                 window.addEventListener("resize", onWindowResize)
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)

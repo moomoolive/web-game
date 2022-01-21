@@ -36,7 +36,7 @@ function mapHandlerToName(rawHandler: ThreadCode): string {
     return handlerName
 }
 
-type StreamSources = "main-thread" | "rendering-thread" | "helper-thread"
+export type StreamSources = "main-thread" | "rendering-thread" | "helper-thread"
 
 export function streamDebugInfo(threadStream: Float64Array, source: StreamSources): StreamDebugData {
     const streamId = getThreadStreamId(threadStream)
