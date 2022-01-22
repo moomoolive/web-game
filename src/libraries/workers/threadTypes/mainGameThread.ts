@@ -3,35 +3,37 @@
 // typescript definitions for these modules made possible by tsconfig.json
 // module alias section
 import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
-import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { 
-    mainThreadStreamFull,
-    mainThreadStreamWithPayload,
-} from "@/libraries/workers/threadStreams/streamCreators"
+    MainThreadEventHandler, 
+    MainThreadEventMessage, 
+    RenderingThreadMessage 
+} from "@/libraries/workers/types"
+import { EngineOptions } from "@/libraries/gameEngine/types"
+
+const logger = {
+    log(...args: any[]) {
+        console.log(renderingThreadIdentity(), ...args)
+    },
+    warn(...args: any[]) {
+        console.warn(renderingThreadIdentity(), ...args)
+    },
+    error(...args: any[]) {
+        console.error(renderingThreadIdentity(), ...args)
+    },
+} as const
 
 let threadIdCounter = 0
-
-function generateThreadId(): number {
-    let id = threadIdCounter
-    threadIdCounter++
-    return id
-}
-
 export class MainGameThread {
     private worker = mainGameThreadConstructor()
 
     constructor() {
         this.worker.onerror = (err: ErrorEvent) => {
-            console.error(renderingThreadIdentity(), " fatal error occurred on main thread, error:", err)
+            logger.error(" fatal error occurred on main thread, error:", err)
         }
 
-        this.worker.onmessageerror = err => {
-            console.error(
-                renderingThreadIdentity(),
-                "error occur when recieving message from main thread, error:", 
-                err
-            )
+        this.worker.onmessageerror = message => {
+            logger.error("error occur when recieving message from main thread, message:", message)
         }
     }
 
@@ -39,43 +41,60 @@ export class MainGameThread {
         this.worker.terminate()
     }
 
+    restart() {
+        logger.log("⚡restarting main thread...")
+        const previousOnMessage = this.worker.onmessage
+        const previousOnError = this.worker.onerror
+        const previousOnMessageError = this.worker.onmessageerror
+        this.worker.terminate()
+        this.worker = mainGameThreadConstructor()
+        this.worker.onmessage = previousOnMessage
+        this.worker.onerror = previousOnError
+        this.worker.onmessageerror = previousOnMessageError 
+    }
+
     setFatalErrorHandler(handler: (err: ErrorEvent) => void) {
         this.worker.onerror = handler
     }
 
-    setOnMessageHandler(handler: (message: MessageEvent<Float64Array>) => void) {
+    setOnMessageHandler(handler: (message: MessageEvent<RenderingThreadMessage>) => void) {
         this.worker.onmessage = handler 
     }
 
-    postMessage(threadStream: Float64Array) {
+    private postMessage(handler: MainThreadEventHandler, payload: Float64Array, meta: string[]) {
+        let id = threadIdCounter
+        threadIdCounter++
+        const message: MainThreadEventMessage = { 
+            handler,
+            id,
+            payload,
+            meta
+        }
         // pass payload by reference
-        this.worker.postMessage(threadStream, [threadStream.buffer])
+        this.worker.postMessage(message, [payload.buffer])
     }
 
     notifyKeyDown(event: KeyboardEvent) {
-        const stream = mainThreadStreamWithPayload(
-            mainThreadCodes.keyDown,
-            generateThreadId(),
-            new Float64Array([event.keyCode])
-        )
-        this.postMessage(stream)
+        this.postMessage("keyDown", new Float64Array([event.keyCode]), [])
     }
 
     notifyKeyUp(event: KeyboardEvent) {
-        const stream = mainThreadStreamWithPayload(
-            mainThreadCodes.keyUp,
-            generateThreadId(),
-            new Float64Array([event.keyCode])
-        )
-        this.postMessage(stream)
+        this.postMessage("keyUp", new Float64Array([event.keyCode]), [])
     }
 
-    renderingPingAcknowledged(pingStreamId: number) {
-        const stream = mainThreadStreamFull(
-            mainThreadCodes.renderingPingAcknowledged,
-            generateThreadId(),
-            pingStreamId
+    renderingPingAcknowledged(pingStreamId: number, options: EngineOptions) {
+        this.postMessage(
+            "renderingPingAcknowledged", 
+            new Float64Array(), 
+            [JSON.stringify(options), "respondingTo="+ pingStreamId]
         )
-        this.postMessage(stream)
+    }
+
+    prepareForRestart(fatalErrorMessageId: number) {
+        this.postMessage(
+            "prepareForRestart", 
+            new Float64Array(), 
+            ["respondingTo=" + fatalErrorMessageId]
+        )
     }
 }

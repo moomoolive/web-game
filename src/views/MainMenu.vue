@@ -80,7 +80,7 @@
             <span class="text-primary-color ml-0.5 mr-1">
                 <font-awesome-icon :icon="faCodeBranch"/>
             </span>
-             v{{ APP_VERSION }}
+             v{{ globals.APP_VERSION }}
         </div>
     </div>
 
@@ -152,7 +152,7 @@ import {
     faGamepad
 } from '@fortawesome/free-solid-svg-icons'
 
-import { APP_VERSION } from '@/consts'
+import { globals } from '@/consts'
 import { deviceIsCompatible } from '@/libraries/misc'
 import checkOrTimes from '@/components/misc/checkOrTimes.vue'
 

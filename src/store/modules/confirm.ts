@@ -18,19 +18,19 @@ interface ShowModalOptions extends ModalOptions {
     resolver: (arg1: boolean) => void
 }
 
-enum Mutations {
-    SHOW_CONFIRM_MODAL = "showConfirmModal",
-    RESOLVE_CONFIRM_MODAL = "resolveConfirmModal"
+const enum Mutations {
+    showConfirmModal = "showConfirmModal",
+    resolveConfirmModal = "resolveConfirmModal"
 }
 
 const mutations: MutationTree<ConfirmState> = {
-    [Mutations.SHOW_CONFIRM_MODAL](state, payload: ShowModalOptions) {
+    [Mutations.showConfirmModal](state, payload: ShowModalOptions) {
         state.show = true
         state.resolver = payload.resolver
         state.header = payload.header
         state.body = payload.body
     },
-    [Mutations.RESOLVE_CONFIRM_MODAL](state, payload: boolean) {
+    [Mutations.resolveConfirmModal](state, payload: boolean) {
         state.resolver(payload)
         state.show = false
     }
@@ -41,15 +41,21 @@ export interface ConfirmActions {
     resolveModal: (confirm: boolean) => void
 }
 
+export const enum module { name = "confirm" }
+export const enum actionNames {
+    modal = "confirm/modal",
+    resolveModal = "confirm/resolveModal"
+}
+
 const actions: ActionTree<ConfirmState, RootState> = {
     async modal({ commit }, options : ModalOptions): Promise<boolean> {
         return new Promise(resolve => {
             const payload: ShowModalOptions = {...options, resolver: resolve }
-            commit(Mutations.SHOW_CONFIRM_MODAL, payload)
+            commit(Mutations.showConfirmModal, payload)
         })
     },
     resolveModal({ commit }, payload: boolean) {
-        commit(Mutations.RESOLVE_CONFIRM_MODAL, payload)
+        commit(Mutations.resolveConfirmModal, payload)
     }
 }
 

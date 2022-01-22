@@ -39,8 +39,8 @@ const state: DeviceSpecsState = {
     type: currentDeviceType()
 }
 
-enum Mutations {
-    UPDATE_CPU_SPECS = "updateCPUSpecs"
+const enum Mutations {
+    updateCPUSpecs = "updateCPUSpecs"
 }
 
 interface CPUSpecs {
@@ -49,7 +49,7 @@ interface CPUSpecs {
 }
 
 const mutations: MutationTree<DeviceSpecsState> = {
-    [Mutations.UPDATE_CPU_SPECS](state, payload: CPUSpecs) {
+    [Mutations.updateCPUSpecs](state, payload: CPUSpecs) {
         state.estimatedPhysicalCores = payload.physicalCores
         state.totalCores = payload.totalCores
     }
@@ -57,6 +57,11 @@ const mutations: MutationTree<DeviceSpecsState> = {
 
 export interface DeviceSpecsActions {
     getCPUSpecs: () => Promise<void>
+}
+
+export const enum module { name = "device" }
+export const enum actionNames {
+    getCPUSpecs = "device/getCPUSpecs"
 }
 
 const actions: ActionTree<DeviceSpecsState, RootState> = {
@@ -67,7 +72,7 @@ const actions: ActionTree<DeviceSpecsState, RootState> = {
                 physicalCores: estimatedPhysicalCores,
                 totalCores: reportedCores || estimatedPhysicalCores * HYPER_THREADING_MULTIPLIER
             }
-            commit(Mutations.UPDATE_CPU_SPECS, payload)
+            commit(Mutations.updateCPUSpecs, payload)
             window.localStorage.setItem(ESTIMATED_PHYSICAL_CORES_LOCALSTORAGE_KEY, JSON.stringify(estimatedPhysicalCores))
             window.localStorage.setItem(REPORTED_CORES_LOCALSTORAGE_KEY, JSON.stringify(reportedCores))
         } catch {

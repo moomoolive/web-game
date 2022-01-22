@@ -1,18 +1,12 @@
 import * as three from "three"
+import { ref, Ref } from "vue"
 import Stats from "stats.js"
-import { Ref, ref } from "vue"
 
 import { Player } from "./player"
-import { MILLISECONDS_IN_SECOND } from "@/consts"
+import { globals } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
 import { MainGameThread } from "@/libraries/workers/threadTypes/mainGameThread"
-import { 
-    RenderingThreadCodes,
-    renderingThreadCodes 
-} from "@/libraries/workers/messageCodes/renderingThread"
-import { ThreadExecutor } from "@/libraries/workers/types"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
-import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { 
     createDebugCamera, 
     createRenderer, 
@@ -22,43 +16,28 @@ import {
     createWorldPlane,
     EngineIndicator
 } from "./utils/initialization"
-import { 
-    getThreadStreamId, 
-    getThreadStreamHandler,
-    threadSteamPayloadFirst 
-} from "@/libraries/workers/threadStreams/streamOperators"
+import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
+import { RenderingThreadHandlerLookup, } from "@/libraries/workers/types"
+import { EngineOptions } from "./types"
+
+
+const logger = {
+    log(...args: any[]) {
+        console.log(renderingThreadIdentity(), ...args)
+    },
+    warn(...args: any[]) {
+        console.warn(renderingThreadIdentity(), ...args)
+    },
+    error(...args: any[]) {
+        console.error(renderingThreadIdentity(), ...args)
+    },
+} as const
 
 const HAS_NOT_RENDERED_YET = -1
 
-type RenderingThreadFunctionLookup = {
-    [key in RenderingThreadCodes]: ThreadExecutor
-}
-
-interface GameOptions {
+export interface GameOptions {
     developmentMode: boolean
     performanceMeter: Stats
-}
-
-type VueRef<T> = Readonly<Ref<T>>
-
-interface UIReferences {
-    paused: VueRef<boolean>
-    showMenu: VueRef<boolean>
-    debugCameraEnabled: VueRef<boolean>
-    renderCount: VueRef<number>
-}
-
-interface Game {
-    vueRefs: () => UIReferences
-    domElement: () => HTMLCanvasElement
-    initialize: () => Promise<void>
-    destroy: () => void
-    run: () => void
-    togglePause: () => void
-    toggleMenu: () => void
-    enableDebugCamera: () => void
-    disableDebugCamera: () => void
-    toggleDebugCamera: () => void
 }
 
 export function createGame(options: GameOptions): Game {
@@ -79,21 +58,18 @@ export function createGame(options: GameOptions): Game {
     const mainEngineIndicator = new EngineIndicator()
 
     const mainThread = new MainGameThread()
-    mainThread.setFatalErrorHandler(err => {
-        console.error(
-            renderingThreadIdentity(), 
-            "fatal error occurred on main thread, error:", 
-            err
-        )
-    })
 
     const showMenu = ref(false)
-    // debug tools
     const debugCamera = createDebugCamera(camera, renderer.domElement)
     const paused = ref(false)
     const renderCount = ref(0)
     const debugCameraEnabled = ref(false)
-    // end
+
+    const showFatalErrorMessage = ref(false)
+    const fatalErrorDetails = ref("no error")
+    const fatalErrorSource = ref("no error")
+    const allowFatalErrorMessageToClose = ref(false)
+    let hasBeenNotifiedAboutFatalError = false
 
     scene.background = createWorldBackground([
         '/game/basic/posx.jpg',
@@ -114,41 +90,85 @@ export function createGame(options: GameOptions): Game {
             scene.add(player.model)
             thirdPersonCamera = new ThirdPersonCamera(camera, player.model)
         })
-        .catch(err => console.error(renderingThreadIdentity(), "ASSET_LOADING_ERROR:", err))
+        .catch(err => logger.error("ASSET_LOADING_ERROR:", err))
     
-    const HANDLER_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
-        [renderingThreadCodes.keyDownResponse](stream: Float64Array) {
-            const keyCode = threadSteamPayloadFirst(stream)
+    const engineOptions: EngineOptions = {
+        loadFromCrash: false
+    }
+
+    const HANDLER_LOOKUP: Readonly<RenderingThreadHandlerLookup> = {
+        keyDownResponse(payload: Float64Array) {
+            const [keyCode] = payload
             player.onKeyDown(keyCode)
         },
-        [renderingThreadCodes.keyUpResponse](stream: Float64Array) {
-            const keyCode = threadSteamPayloadFirst(stream)
+        keyUpResponse(payload: Float64Array) {
+            const [keyCode] = payload
             player.onKeyUp(keyCode)
         },
-        [renderingThreadCodes.acknowledgePing](stream: Float64Array) {
-            console.log(renderingThreadIdentity(), "ping acknowledged @", Date.now())
+        acknowledgePing(_: Float64Array, __: string[], id: number) {
+            logger.log("ping acknowledged @", Date.now())
             mainEngineIndicator.setReady()
-            const streamId = getThreadStreamId(stream)
-            mainThread.renderingPingAcknowledged(streamId)
+            mainThread.renderingPingAcknowledged(id, engineOptions)
+
+            if (engineOptions.loadFromCrash) {
+                engineOptions.loadFromCrash = false
+                /* 
+                    if fatal error occurs
+                    only stop showing user the error
+                    popup after thread has been restarted
+                    and pings the rendering thread again 
+                */
+                allowFatalErrorMessageToClose.value = true
+            }
+        },
+        respondToFatalError(_: Float64Array, meta: string[], id: number) {
+            if (hasBeenNotifiedAboutFatalError) {
+                return
+            }
+            /* tell user about error */
+            hasBeenNotifiedAboutFatalError = true
+            const [likeyErrorSource, errorDetail] = meta
+            fatalErrorDetails.value = errorDetail
+            fatalErrorSource.value = likeyErrorSource
+            allowFatalErrorMessageToClose.value = false
+            showFatalErrorMessage.value = true
+
+            logger.warn("main thread has encountered fatal error, preparing for restart...")
+            logger.warn("fatal error described in message", id)
+            mainThread.prepareForRestart(id)
+            engineOptions.loadFromCrash = true
+        },
+        readyForRestart() {
+            logger.log("⚡recieved restart confirmation")
+            mainThread.restart()
+            hasBeenNotifiedAboutFatalError = false
         }
+
     }
 
     mainThread.setOnMessageHandler(message => {
+        const data = message.data
         try {
-            const stream = message.data
-            const handler = getThreadStreamHandler(stream) as RenderingThreadCodes
-            HANDLER_LOOKUP[handler](stream)
+            const { id, payload, meta, handler } = data 
+            HANDLER_LOOKUP[handler](payload, meta, id)
         } catch(err) {
-            console.warn(renderingThreadIdentity(), "something went wrong when looking up function, payload", message.data)
-            console.error("error:", err)
+            logger.warn("something went wrong when looking up function")
+            logger.warn("message:", data)
+            logger.error("error:", err)
         }
     })
 
     function onKeyDown(event: KeyboardEvent) {
+        if (event.repeat) {
+            return
+        }
         mainThread.notifyKeyDown(event)
     }
 
     function onKeyUp(event: KeyboardEvent) {
+        if (event.repeat) {
+            return
+        }
         mainThread.notifyKeyUp(event)
     }
 
@@ -160,7 +180,7 @@ export function createGame(options: GameOptions): Game {
 
     // rename or remove?
     function updateEntities(timeElaspsedMilliseconds: number) {
-        const timeElapsedSeconds = timeElaspsedMilliseconds / MILLISECONDS_IN_SECOND
+        const timeElapsedSeconds = timeElaspsedMilliseconds / globals.MILLISECONDS_IN_SECOND
         player.update(timeElapsedSeconds)
     }
 
@@ -188,14 +208,23 @@ export function createGame(options: GameOptions): Game {
 
     return {
         vueRefs(): UIReferences {
-            return { paused, showMenu, debugCameraEnabled, renderCount }
+            return { 
+                paused, 
+                showMenu, 
+                debugCameraEnabled, 
+                renderCount,
+                showFatalErrorMessage,
+                fatalErrorDetails,
+                fatalErrorSource,
+                allowFatalErrorMessageToClose
+            }
         },
         domElement(): HTMLCanvasElement {
             return renderer.domElement
         },
         async initialize(): Promise<void> {
             try {
-                await mainEngineIndicator.awaitReadySignal()
+                //await mainEngineIndicator.awaitReadySignal()
                 window.addEventListener("resize", onWindowResize)
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)
@@ -251,6 +280,36 @@ export function createGame(options: GameOptions): Game {
             } else {
                 this.enableDebugCamera()
             }
+        },
+        closeFatalMessageNotice() {
+            showFatalErrorMessage.value = false
         }
     }
+}
+
+export interface Game {
+    vueRefs: () => UIReferences
+    domElement: () => HTMLCanvasElement
+    initialize: () => Promise<void>
+    destroy: () => void
+    run: () => void
+    togglePause: () => void
+    toggleMenu: () => void
+    enableDebugCamera: () => void
+    disableDebugCamera: () => void
+    toggleDebugCamera: () => void
+    closeFatalMessageNotice: () => void
+}
+
+export type VueRef<T> = Readonly<Ref<T>>
+
+export interface UIReferences {
+    paused: VueRef<boolean>
+    showMenu: VueRef<boolean>
+    debugCameraEnabled: VueRef<boolean>
+    renderCount: VueRef<number>
+    fatalErrorSource: VueRef<string>
+    showFatalErrorMessage: VueRef<boolean>
+    fatalErrorDetails: VueRef<string>
+    allowFatalErrorMessageToClose: VueRef<boolean>
 }
