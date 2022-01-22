@@ -12,7 +12,6 @@ import {
 } from "@/libraries/workers/messageCodes/renderingThread"
 import { ThreadExecutor } from "@/libraries/workers/types"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
-import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { 
     createDebugCamera, 
     createRenderer, 
@@ -29,6 +28,9 @@ import {
 } from "@/libraries/workers/threadStreams/streamOperators"
 import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
 import { createGameEngineOptions, EngineOptions } from "./inputOptions/index"
+import { renderingThreadLogger } from "@/libraries/workers/devTools/logging"
+
+const logger = renderingThreadLogger
 
 const HAS_NOT_RENDERED_YET = -1
 
@@ -109,7 +111,7 @@ export function createGame(options: GameOptions): Game {
             scene.add(player.model)
             thirdPersonCamera = new ThirdPersonCamera(camera, player.model)
         })
-        .catch(err => console.error(renderingThreadIdentity(), "ASSET_LOADING_ERROR:", err))
+        .catch(err => logger.error("ASSET_LOADING_ERROR:", err))
     
     const engineOptions: EngineOptions = {
         loadFromCrash: false
@@ -125,7 +127,7 @@ export function createGame(options: GameOptions): Game {
             player.onKeyUp(keyCode)
         },
         [renderingThreadCodes.acknowledgePing](stream: Float64Array) {
-            console.log(renderingThreadIdentity(), "ping acknowledged @", Date.now())
+            logger.log("ping acknowledged @", Date.now())
             mainEngineIndicator.setReady()
             const streamId = getThreadStreamId(stream)
             const options = createGameEngineOptions(engineOptions)
@@ -136,12 +138,12 @@ export function createGame(options: GameOptions): Game {
         },
         [renderingThreadCodes.respondToFatalError](_) {
             /* tell user about error */
-            console.warn(renderingThreadIdentity(), "main thread has encountered fatal error, preparing for restart...")
+            logger.warn("main thread has encountered fatal error, preparing for restart...")
             mainThread.prepareForRestart(2)
             engineOptions.loadFromCrash = true
         },
         [renderingThreadCodes.readyForRestart](_) {
-            console.log(renderingThreadIdentity(),"⚡recieved restart confirmation")
+            logger.log("⚡recieved restart confirmation")
             mainThread.restart()
         }
 
@@ -153,9 +155,9 @@ export function createGame(options: GameOptions): Game {
             const handler = getThreadStreamHandler(stream) as RenderingThreadCodes
             HANDLER_LOOKUP[handler](stream)
         } catch(err) {
-            console.warn(renderingThreadIdentity(), "something went wrong when looking up function")
-            console.warn("stream debug:", streamDebugInfo(stream, "main-thread"))
-            console.error("error:", err)
+            logger.warn("something went wrong when looking up function")
+            logger.warn("stream debug:", streamDebugInfo(stream, "main-thread"))
+            logger.error("error:", err)
         }
     })
 

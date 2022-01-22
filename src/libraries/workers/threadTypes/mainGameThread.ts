@@ -4,12 +4,14 @@
 // module alias section
 import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
 import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
-import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { 
     mainThreadStreamFull,
     mainThreadStreamWithPayload,
     mainThreadStreamFullWithPayload
 } from "@/libraries/workers/threadStreams/streamCreators"
+import { renderingThreadLogger } from "@/libraries/workers/devTools/logging"
+
+const logger = renderingThreadLogger
 
 let threadIdCounter = 0
 function generateThreadId(): number {
@@ -23,15 +25,11 @@ export class MainGameThread {
 
     constructor() {
         this.worker.onerror = (err: ErrorEvent) => {
-            console.error(renderingThreadIdentity(), " fatal error occurred on main thread, error:", err)
+            logger.error(" fatal error occurred on main thread, error:", err)
         }
 
         this.worker.onmessageerror = err => {
-            console.error(
-                renderingThreadIdentity(),
-                "error occur when recieving message from main thread, error:", 
-                err
-            )
+            logger.error("error occur when recieving message from main thread, error:", err)
         }
     }
 
@@ -40,7 +38,7 @@ export class MainGameThread {
     }
 
     restart() {
-        console.log(renderingThreadIdentity(), "⚡restarting main thread...")
+        logger.log("⚡restarting main thread...")
         const previousOnMessage = this.worker.onmessage
         const previousOnError = this.worker.onerror
         const previousOnMessageError = this.worker.onmessageerror

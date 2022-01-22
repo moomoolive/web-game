@@ -1,7 +1,6 @@
 import { ThreadExecutor } from "@/libraries/workers/types"
 import { MainThreadCodes, mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { renderingThreadCodes } from "@/libraries/workers/messageCodes/renderingThread"
-import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { helperGameThreadCodes } from "@/libraries/workers/messageCodes/helperGameThread"
 import { 
     getThreadStreamHandler,
@@ -22,8 +21,13 @@ import {
 } from "@/libraries/workers/workerComponents/common"
 import { AppDatabase } from "@/libraries/appDB/index"
 import { parseEngineOptions } from "@/libraries/gameEngine/inputOptions/index"
+import { Reference } from "@/libraries/dataStructures/index"
+import { sendToRenderingThreadAsync } from "@/libraries/workers/workerComponents/mainThread"
+import { mainThreadLogger } from "@/libraries/workers/devTools/logging"
 
-console.log(mainThreadIdentity(), "thread is running")
+const logger = mainThreadLogger
+
+logger.log("thread is running")
 
 self.onerror = mainThreadErrorHandler
 self.onmessageerror = mainThreadMessageErrorHandler
@@ -32,8 +36,8 @@ type MainThreadFunctionLookup = {
     [key in MainThreadCodes]: ThreadExecutor
 }
 
-let emergencyShutdown = { value: false }
-let incomingEvents: Float64Array[] = []
+let emergencyShutdown = new Reference(false)
+let incomingEventsQueue: Float64Array[] = []
 const db = new AppDatabase()
 
 const HANDLER_LOOKUP: Readonly<MainThreadFunctionLookup> = {
@@ -53,70 +57,68 @@ const HANDLER_LOOKUP: Readonly<MainThreadFunctionLookup> = {
     },
     [mainThreadCodes.helperPingAcknowledged](data: Float64Array) {
         const [workerId] = data
-        console.log(mainThreadIdentity(), "game helper thread", workerId, "responded to ping")
+        logger.log("game helper thread", workerId, "responded to ping")
     },
     async [mainThreadCodes.renderingPingAcknowledged](stream: Float64Array) {
-        console.log(`${mainThreadIdentity()} rendering thread responded to ping`)
+        logger.log("rendering thread responded to ping")
         const { loadFromCrash } = parseEngineOptions(stream)
         if (!loadFromCrash) {
             return
         }
-        console.log(mainThreadIdentity(), "loading state from crash save")
+        logger.log("loading state from crash save")
         try {
-            const res = await db.getLatestCrashSave()
-            console.log("latest game crash save", res)
+            const _ = await db.getLatestCrashSave()
+            /* idealy replace current state */
         } catch(err) {
-            console.error(mainThreadIdentity(), "loading from crash save failed, error", err)
+            logger.error("loading from crash save failed, error", err)
         }
     },
     [mainThreadCodes.jobCouldNotComplete](_) {},
     [mainThreadCodes.prepareForRestart](_) {
-        console.warn(mainThreadIdentity(), "rendering thread has requested restart, probably due to an unrecoverable error")
-        console.warn(mainThreadIdentity(), "⚡restarting immediately...")
-        console.log(mainThreadIdentity(), "preparing for backup")
-        emergencyShutdown.value = true
+        logger.warn("rendering thread has requested restart, probably due to an unrecoverable error")
+        logger.warn("⚡restarting immediately...")
+        logger.log("preparing for backup")
+        emergencyShutdown.set(true)
         /* clear all incoming events that haven't been processed */
-        incomingEvents = []
+        incomingEventsQueue = []
     }
 }
 
 self.onmessage = function handleRenderingThreadMessage(message: MessageEvent<Float64Array>) {
     const stream = message.data
     try {
-        incomingEvents.push(stream)
+        incomingEventsQueue.push(stream)
     } catch(err) {
-        console.warn(mainThreadIdentity(), "couldn't add incoming event to inputs")
-        console.warn("stream debug:", streamDebugInfo(stream, "rendering-thread"))
-        console.error("error:", err)
+        logger.warn("couldn't add incoming event to inputs")
+        logger.warn(streamDebugInfo(stream, "rendering-thread"))
+        logger.error("error:", err)
     }
 }
 
 
-function handleIncomingEvents() {
-    const sucessful: number[] = []
-    let allJobsPassed = true
-    for (let i = 0; i < incomingEvents.length; i++) {
-        const stream = incomingEvents[i]
+async function handleIncomingEvents() {
+    await yieldForIncomingEvents()
+
+    for (let i = 0; i < incomingEventsQueue.length; i++) {
+        const stream = incomingEventsQueue[i]
         try {
             const handler = getThreadStreamHandler(stream) as MainThreadCodes
             HANDLER_LOOKUP[handler](stream)
-            sucessful.push(i)
         } catch(err) {
-            allJobsPassed = false
-            console.warn(`${mainThreadIdentity()} something went wrong when looking up function`)
-            console.warn("stream debug:", streamDebugInfo(stream, "rendering-thread"))
-            console.error("error:", err)
+            logger.warn("something went wrong when looking up handler for incoming event")
+            logger.warn(streamDebugInfo(stream, "rendering-thread"))
+            logger.error("error", err)
         }
     }
 
-    if (allJobsPassed) {
-        return incomingEvents = []
-    }
-    for (let i = sucessful.length - 1; i >= 0; i--) {
-        const successfulJobIndex = sucessful[i]
-        incomingEvents.splice(successfulJobIndex, 1)
-    }
+    /* 
+        all unsuccesful events are forgotten
+        so that event queue doesn't clog 
+    */
+    incomingEventsQueue = []
 }
+
+function sendRenderingInfo() {}
 
 interface GameState {}
 
@@ -124,26 +126,29 @@ const NO_TIMER_DEFINED = -1
 const MAX_GAME_LOOP_ERROR_RETRIES = 5
 const RESET_LOOP_RETRY_COUNT_MILLISECONDS = 3_000
 
-let runGameLoop = true
-let loopRetryCount = 0
-let resetLoopRetryCountTimerId = NO_TIMER_DEFINED
-
-
-sendToRenderingThread(
-    renderingThreadStream(renderingThreadCodes.acknowledgePing, generateStreamId()),
-)
-const threadPool = new HelperGameThreadPool({ threadCount: 2 })
-await threadPool.initialize()
-
 async function gameLoop() {
-    console.log(mainThreadIdentity(), "🔥game loop ready")
+    let runGameLoop = true
+    let loopRetryCount = 0
+    let resetLoopRetryCountTimerId = NO_TIMER_DEFINED
+
+    const threadPool = new HelperGameThreadPool({ threadCount: 2 })
+
+    await Promise.all([
+        sendToRenderingThreadAsync(
+            renderingThreadStream(renderingThreadCodes.acknowledgePing, generateStreamId()),
+        ),
+        threadPool.initialize()
+    ])
+    
+    logger.log("🔥game loop ready")
+    
     while(runGameLoop) {
         try {
-            handleIncomingEvents()
-            await yieldForIncomingEvents()
+            sendRenderingInfo()
+            await handleIncomingEvents()
         } catch(err) {
             if (loopRetryCount === MAX_GAME_LOOP_ERROR_RETRIES) {
-                console.warn(
+                logger.warn(
                     "loop has fail more than", 
                     MAX_GAME_LOOP_ERROR_RETRIES,
                     ", this error is probably fatal.",
@@ -159,11 +164,7 @@ async function gameLoop() {
             } else if (loopRetryCount > MAX_GAME_LOOP_ERROR_RETRIES) {
                 runGameLoop = false
             }
-            console.error(
-                mainThreadIdentity(), 
-                "an uncaught exception occured in game loop. Restarting! Error:",
-                err
-            )
+            logger.error("an uncaught exception occured in game loop. Restarting! Error:", err)
             loopRetryCount++
             clearTimeout(resetLoopRetryCountTimerId)
             setTimeout(() => loopRetryCount = 0, RESET_LOOP_RETRY_COUNT_MILLISECONDS)
@@ -176,9 +177,8 @@ async function gameLoop() {
         from rendering thread 
     */
     while (!emergencyShutdown.value) {
-        handleIncomingEvents()
-        console.warn(mainThreadIdentity(), "waiting for rendering thread repsonse")
-        await yieldForIncomingEvents()
+        logger.warn("waiting for rendering thread repsonse")
+        await handleIncomingEvents()
     }
 
     /*  
@@ -188,13 +188,13 @@ async function gameLoop() {
     try {
         const state: GameState = {}
         await db.createCrashSave(JSON.stringify(state))
-        console.log(mainThreadIdentity(), "backup successfully created")
+        logger.log("backup successfully created")
     } catch(err) {
         /* 
             lol, at this point, the game has given up on try to save
             the current game state
         */
-        console.error(mainThreadIdentity(), "backup protocol failed, error:", err)
+        logger.error("backup protocol failed, error:", err)
     } finally {
         const stream = renderingThreadStream(
             renderingThreadCodes.readyForRestart,
