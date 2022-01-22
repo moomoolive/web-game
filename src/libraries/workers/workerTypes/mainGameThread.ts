@@ -1,11 +1,18 @@
 import { HelperGameThreadPool } from "@/libraries/workers/threadTypes/helperGameThreadPool"
-import { yieldForIncomingEvents } from "@/libraries/workers/utils/index"
 import { AppDatabase } from "@/libraries/appDB/index"
 import { Reference } from "@/libraries/dataStructures/index"
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
-import { MainThreadEventHandlerLookup, MainThreadEventMessage } from "@/libraries/workers/types"
-import { sendToRenderingThread, sendToRenderingThreadAsync } from "@/libraries/workers/workerComponents/mainThread/index"
-import { EngineOptions } from "@/libraries/gameEngine/inputOptions/index"
+import { 
+    MainThreadEventHandlerLookup, 
+    MainThreadEventMessage,
+    CompiledGameState 
+} from "@/libraries/workers/types"
+import { 
+    sendToRenderingThread, 
+    sendToRenderingThreadAsync,
+    yieldForIncomingEvents 
+} from "@/libraries/workers/workerComponents/mainThread/index"
+import { EngineOptions } from "@/libraries/gameEngine/types"
 
 const logger = {
     log(...args: any[]) {
@@ -107,8 +114,6 @@ async function handleIncomingEvents() {
 
 function sendRenderingInfo() {}
 
-interface GameState {}
-
 const NO_TIMER_DEFINED = -1 
 const MAX_GAME_LOOP_ERROR_RETRIES = 5
 const RESET_LOOP_RETRY_COUNT_MILLISECONDS = 3_000
@@ -172,7 +177,7 @@ async function gameLoop() {
     */
     let saveMetaData = "backupCreated=true"
     try {
-        const state: GameState = {}
+        const state: CompiledGameState = {}
         await db.createCrashSave(JSON.stringify(state))
         logger.log("backup successfully created")
     } catch(err) {

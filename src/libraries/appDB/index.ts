@@ -1,13 +1,13 @@
 import Dexie from "dexie"
 
-import { globals } from "@/consts"
+const DB_VERSION = 0.1
 
 export class AppDatabase extends Dexie {
     saves!: Dexie.Table<GameSave, Id>
 
     constructor() {
         super("app-database")
-        this.version(parseFloat(globals.APP_VERSION)).stores({
+        this.version(DB_VERSION).stores({
             saves: "++id,type,createdAt,updatedAt,stringifiedState"
         })
     }

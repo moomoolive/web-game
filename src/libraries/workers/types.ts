@@ -45,3 +45,5 @@ export type MainThreadEventMessage = ThreadMessage<MainThreadEventHandler>
 export type RenderingThreadMessage = ThreadMessage<RenderingThreadHandler>
 export type HelperGameThreadMessage = ThreadMessage<HelperGameThreadHandler>
 export type MainThreadHelperMessage = ThreadMessage<MainThreadHelperHandler>
+
+export interface CompiledGameState {}

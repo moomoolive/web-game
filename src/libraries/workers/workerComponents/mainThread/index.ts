@@ -4,14 +4,15 @@
 */
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { RenderingThreadHandler, RenderingThreadMessage, MainThreadEventMessage } from "@/libraries/workers/types"
-import { generateStreamId } from "@/libraries/workers/workerComponents/common"
+import { generateMessageId } from "@/libraries/workers/workerComponents/common"
+import { sleepSeconds } from "@/libraries/misc"
 
 export function sendToRenderingThread(handler: RenderingThreadHandler, payload: Float64Array, meta: string[]) {
     const message: RenderingThreadMessage = {
         handler,
         payload,
         meta,
-        id: generateStreamId()
+        id: generateMessageId()
     }
     self.postMessage(message, [payload.buffer])
 }
@@ -42,4 +43,8 @@ export function sendToRenderingThreadAsync(handler: RenderingThreadHandler, payl
 
         sendToRenderingThread(handler, payload, meta)
     })
+}
+
+export async function yieldForIncomingEvents(): Promise<void> {
+    await sleepSeconds(0)
 }

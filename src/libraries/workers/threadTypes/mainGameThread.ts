@@ -3,14 +3,13 @@
 // typescript definitions for these modules made possible by tsconfig.json
 // module alias section
 import mainGameThreadConstructor from "worker:@/libraries/workers/workerTypes/mainGameThread"
-import { mainThreadCodes } from "@/libraries/workers/messageCodes/mainThread"
 import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { 
     MainThreadEventHandler, 
     MainThreadEventMessage, 
     RenderingThreadMessage 
 } from "@/libraries/workers/types"
-import { EngineOptions } from "@/libraries/gameEngine/inputOptions/index"
+import { EngineOptions } from "@/libraries/gameEngine/types"
 
 const logger = {
     log(...args: any[]) {

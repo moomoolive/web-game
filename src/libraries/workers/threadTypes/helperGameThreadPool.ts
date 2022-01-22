@@ -21,7 +21,7 @@ const logger = {
 
 let streamCounterId = 0
 
-function generateStreamId(): number {
+function generateMessageId(): number {
     const id = streamCounterId
     streamCounterId++
     return id
@@ -117,7 +117,7 @@ export class HelperGameThreadPool {
                 payload,
                 handler: "acknowledgePing",
                 meta: [],
-                id: generateStreamId()
+                id: generateMessageId()
             }
             thread.postMessage(message, [payload.buffer])
         })
@@ -194,7 +194,7 @@ export class HelperGameThreadPool {
                 handler,
                 payload,
                 meta: [],
-                id: generateStreamId()
+                id: generateMessageId()
             }
             thread.postMessage(message, [payload.buffer])
         })
@@ -287,7 +287,7 @@ export class HelperGameThreadPool {
                 handler,
                 payload,
                 meta: [],
-                id: generateStreamId()
+                id: generateMessageId()
             }
             thread.postMessage(message, [payload.buffer])
         })

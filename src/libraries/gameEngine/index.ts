@@ -1,15 +1,10 @@
 import * as three from "three"
-import Stats from "stats.js"
-import { Ref, ref } from "vue"
+import { ref } from "vue"
 
 import { Player } from "./player"
 import { globals } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
 import { MainGameThread } from "@/libraries/workers/threadTypes/mainGameThread"
-import { 
-    RenderingThreadCodes,
-    renderingThreadCodes 
-} from "@/libraries/workers/messageCodes/renderingThread"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
 import { 
     createDebugCamera, 
@@ -20,18 +15,9 @@ import {
     createWorldPlane,
     EngineIndicator
 } from "./utils/initialization"
-import { 
-    getThreadStreamId, 
-    getThreadStreamHandler,
-    threadSteamPayloadFirst 
-} from "@/libraries/workers/threadStreams/streamOperators"
-import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
-import { createGameEngineOptions, EngineOptions } from "./inputOptions/index"
 import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
-import { 
-    RenderingThreadHandlerLookup,
-    RenderingThreadMessage
-} from "@/libraries/workers/types"
+import { RenderingThreadHandlerLookup, } from "@/libraries/workers/types"
+import { Game, GameOptions, UIReferences, EngineOptions } from "./types"
 
 const logger = {
     log(...args: any[]) {
@@ -46,33 +32,6 @@ const logger = {
 } as const
 
 const HAS_NOT_RENDERED_YET = -1
-
-interface GameOptions {
-    developmentMode: boolean
-    performanceMeter: Stats
-}
-
-type VueRef<T> = Readonly<Ref<T>>
-
-interface UIReferences {
-    paused: VueRef<boolean>
-    showMenu: VueRef<boolean>
-    debugCameraEnabled: VueRef<boolean>
-    renderCount: VueRef<number>
-}
-
-interface Game {
-    vueRefs: () => UIReferences
-    domElement: () => HTMLCanvasElement
-    initialize: () => Promise<void>
-    destroy: () => void
-    run: () => void
-    togglePause: () => void
-    toggleMenu: () => void
-    enableDebugCamera: () => void
-    disableDebugCamera: () => void
-    toggleDebugCamera: () => void
-}
 
 export function createGame(options: GameOptions): Game {
     const performanceMeter = options.performanceMeter
