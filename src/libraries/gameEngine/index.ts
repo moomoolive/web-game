@@ -10,7 +10,6 @@ import {
     RenderingThreadCodes,
     renderingThreadCodes 
 } from "@/libraries/workers/messageCodes/renderingThread"
-import { ThreadExecutor } from "@/libraries/workers/types"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
 import { 
     createDebugCamera, 
@@ -28,15 +27,25 @@ import {
 } from "@/libraries/workers/threadStreams/streamOperators"
 import { streamDebugInfo } from "@/libraries/workers/threadStreams/debugTools"
 import { createGameEngineOptions, EngineOptions } from "./inputOptions/index"
-import { renderingThreadLogger } from "@/libraries/workers/devTools/logging"
+import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
+import { 
+    RenderingThreadHandlerLookup,
+    RenderingThreadMessage
+} from "@/libraries/workers/types"
 
-const logger = renderingThreadLogger
+const logger = {
+    log(...args: any[]) {
+        console.log(renderingThreadIdentity(), ...args)
+    },
+    warn(...args: any[]) {
+        console.warn(renderingThreadIdentity(), ...args)
+    },
+    error(...args: any[]) {
+        console.error(renderingThreadIdentity(), ...args)
+    },
+} as const
 
 const HAS_NOT_RENDERED_YET = -1
-
-type RenderingThreadFunctionLookup = {
-    [key in RenderingThreadCodes]: ThreadExecutor
-}
 
 interface GameOptions {
     developmentMode: boolean
@@ -117,32 +126,31 @@ export function createGame(options: GameOptions): Game {
         loadFromCrash: false
     }
 
-    const HANDLER_LOOKUP: Readonly<RenderingThreadFunctionLookup> = {
-        [renderingThreadCodes.keyDownResponse](stream: Float64Array) {
-            const keyCode = threadSteamPayloadFirst(stream)
+    const HANDLER_LOOKUP: Readonly<RenderingThreadHandlerLookup> = {
+        keyDownResponse(payload: Float64Array) {
+            const [keyCode] = payload
             player.onKeyDown(keyCode)
         },
-        [renderingThreadCodes.keyUpResponse](stream: Float64Array) {
-            const keyCode = threadSteamPayloadFirst(stream)
+        keyUpResponse(payload: Float64Array) {
+            const [keyCode] = payload
             player.onKeyUp(keyCode)
         },
-        [renderingThreadCodes.acknowledgePing](stream: Float64Array) {
+        acknowledgePing(_: Float64Array, __: string[], id: number) {
             logger.log("ping acknowledged @", Date.now())
             mainEngineIndicator.setReady()
-            const streamId = getThreadStreamId(stream)
-            const options = createGameEngineOptions(engineOptions)
-            mainThread.renderingPingAcknowledged(streamId, options)
+            mainThread.renderingPingAcknowledged(id, engineOptions)
+
             if (engineOptions.loadFromCrash) {
                 engineOptions.loadFromCrash = false
             }
         },
-        [renderingThreadCodes.respondToFatalError](_) {
+        respondToFatalError() {
             /* tell user about error */
             logger.warn("main thread has encountered fatal error, preparing for restart...")
             mainThread.prepareForRestart(2)
             engineOptions.loadFromCrash = true
         },
-        [renderingThreadCodes.readyForRestart](_) {
+        readyForRestart() {
             logger.log("⚡recieved restart confirmation")
             mainThread.restart()
         }
@@ -150,13 +158,13 @@ export function createGame(options: GameOptions): Game {
     }
 
     mainThread.setOnMessageHandler(message => {
-        const stream = message.data
+        const data = message.data
         try {
-            const handler = getThreadStreamHandler(stream) as RenderingThreadCodes
-            HANDLER_LOOKUP[handler](stream)
+            const { id, payload, meta, handler } = data 
+            HANDLER_LOOKUP[handler](payload, meta, id)
         } catch(err) {
             logger.warn("something went wrong when looking up function")
-            logger.warn("stream debug:", streamDebugInfo(stream, "main-thread"))
+            logger.warn("message:", data)
             logger.error("error:", err)
         }
     })
