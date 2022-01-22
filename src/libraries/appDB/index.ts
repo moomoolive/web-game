@@ -1,6 +1,6 @@
 import Dexie from "dexie"
 
-const DB_VERSION = 0.1
+const DB_VERSION = 1
 
 export class AppDatabase extends Dexie {
     saves!: Dexie.Table<GameSave, Id>

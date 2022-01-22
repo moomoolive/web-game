@@ -1,6 +1,7 @@
 import { helperGameThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { HelperGameThreadHandlerLookup, HelperGameThreadMessage } from "@/libraries/workers/types"
 import { sendToMainThread } from "@/libraries/workers/workerComponents/helperGameThread/index"
+import { mainThread } from "@/libraries/workers/workerComponents/mainThread/consts"
 
 const ID_NOT_DEFINED = -1
 
@@ -32,10 +33,15 @@ self.onmessage = message => {
 }
 
 const HANDLER_LOOKUP: Readonly<HelperGameThreadHandlerLookup> = {
-    acknowledgePing(payload: Float64Array, _: string[], id: number) {
-        const [workerId] = payload
-        worker_id = workerId ?? ID_NOT_DEFINED
-        logger.log(`ping acknowledged @`, Date.now())
+    acknowledgePing(_: Float64Array, meta: string[], id: number) {
+        const [workerId] = meta
+        const parsed = parseInt(workerId)
+        worker_id = parsed ?? ID_NOT_DEFINED
+        if (id === mainThread.reinitalizedWorkerMessageId) {
+            logger.log(`worker reinitialization acknowledged @`, Date.now())
+        } else {
+            logger.log(`ping acknowledged @`, Date.now())
+        }
         sendToMainThread(
             "helperPingAcknowledged",
             new Float64Array(),

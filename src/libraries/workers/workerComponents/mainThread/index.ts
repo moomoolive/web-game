@@ -4,15 +4,18 @@
 */
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { RenderingThreadHandler, RenderingThreadMessage, MainThreadEventMessage } from "@/libraries/workers/types"
-import { generateMessageId } from "@/libraries/workers/workerComponents/common"
 import { sleepSeconds } from "@/libraries/misc"
 
+let messageIdCount = 0
+
 export function sendToRenderingThread(handler: RenderingThreadHandler, payload: Float64Array, meta: string[]) {
+    const id = messageIdCount
+    messageIdCount++
     const message: RenderingThreadMessage = {
         handler,
         payload,
         meta,
-        id: generateMessageId()
+        id
     }
     self.postMessage(message, [payload.buffer])
 }

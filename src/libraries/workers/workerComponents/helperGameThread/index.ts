@@ -3,14 +3,17 @@
     most functions here will probably not work on the DOM thread!  
 */
 import { MainThreadHelperHandler, MainThreadHelperMessage } from "@/libraries/workers/types"
-import { generateMessageId } from "@/libraries/workers/workerComponents/common"
+
+let messageIdCount = 0
 
 export function sendToMainThread(handler: MainThreadHelperHandler, payload: Float64Array, meta: string[]) {
+    const id = messageIdCount
+    messageIdCount++
     const message: MainThreadHelperMessage = {
         handler,
         payload,
         meta,
-        id: generateMessageId()
+        id
     }
     self.postMessage(message, [payload.buffer])
 }

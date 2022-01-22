@@ -32,7 +32,6 @@ self.onmessageerror = message => {
     logger.error("message:", message.data)
 }
 
-
 logger.log("thread is running")
 
 let emergencyShutdown = new Reference(false)
@@ -74,8 +73,6 @@ const EVENT_HANDLER_LOOKUP: Readonly<MainThreadEventHandlerLookup> = {
         logger.warn("⚡restarting immediately...")
         logger.log("preparing for backup")
         emergencyShutdown.set(true)
-        /* clear all incoming events that haven't been processed */
-        incomingEventsQueue = []
     }
 }
 
@@ -119,18 +116,34 @@ const MAX_GAME_LOOP_ERROR_RETRIES = 5
 const RESET_LOOP_RETRY_COUNT_MILLISECONDS = 3_000
 
 async function gameLoop() {
+    let errorMessage = "no message"
+    const threadPool = new HelperGameThreadPool({ threadCount: 2 })
+
+    try {
+        await Promise.all([
+            sendToRenderingThreadAsync("acknowledgePing", new Float64Array(), []),
+            threadPool.initialize()
+        ])
+    } catch(err) {
+        errorMessage = (err as unknown as string)?.toString()
+        /* loop until rendering thread sends help */
+        while (!emergencyShutdown.value) {
+            sendToRenderingThread(
+                "respondToFatalError",
+                new Float64Array(),
+                ["gameInitalizationError", errorMessage]
+            )
+            logger.warn("waiting for rendering thread repsonse")
+            await handleIncomingEvents()
+        }
+    }
+    
+    await handleIncomingEvents()
+
     let runGameLoop = true
     let loopRetryCount = 0
     let resetLoopRetryCountTimerId = NO_TIMER_DEFINED
 
-    const threadPool = new HelperGameThreadPool({ threadCount: 2 })
-
-    await Promise.all([
-        sendToRenderingThreadAsync("acknowledgePing", new Float64Array(), []),
-        threadPool.initialize()
-    ])
-    await handleIncomingEvents()
-    
     logger.log("🔥game loop ready")
     
     while(runGameLoop) {
@@ -140,18 +153,19 @@ async function gameLoop() {
         } catch(err) {
             if (loopRetryCount === MAX_GAME_LOOP_ERROR_RETRIES) {
                 logger.warn(
-                    "loop has fail more than", 
+                    "loop has failed more than", 
                     MAX_GAME_LOOP_ERROR_RETRIES,
-                    ", this error is probably fatal.",
-                    "Loop with retry once more then exit."
+                    "times, this error is probably fatal.",
+                    "Loop will retry once more then exit if error occurs again."
                 )
-                // notify rendering thread
-                sendToRenderingThread(
-                    "respondToFatalError",
-                    new Float64Array(),
-                    ["gameLoopError", (err as unknown as string)?.toString()]
-                )
+
+                /* 
+                    clear all incoming events that haven't been processed
+                    as it may be source of error 
+                */
+                incomingEventsQueue = []
             } else if (loopRetryCount > MAX_GAME_LOOP_ERROR_RETRIES) {
+                errorMessage = (err as unknown as string)?.toString()
                 runGameLoop = false
             }
             logger.error("an uncaught exception occured in game loop. Restarting! Error:", err)
@@ -167,6 +181,11 @@ async function gameLoop() {
         from rendering thread 
     */
     while (!emergencyShutdown.value) {
+        sendToRenderingThread(
+            "respondToFatalError",
+            new Float64Array(),
+            ["gameLoopError", errorMessage]
+        )
         logger.warn("waiting for rendering thread repsonse")
         await handleIncomingEvents()
     }

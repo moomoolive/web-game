@@ -1,5 +1,6 @@
 import * as three from "three"
-import { ref } from "vue"
+import { ref, Ref } from "vue"
+import Stats from "stats.js"
 
 import { Player } from "./player"
 import { globals } from "@/consts"
@@ -17,7 +18,8 @@ import {
 } from "./utils/initialization"
 import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
 import { RenderingThreadHandlerLookup, } from "@/libraries/workers/types"
-import { Game, GameOptions, UIReferences, EngineOptions } from "./types"
+import { EngineOptions } from "./types"
+
 
 const logger = {
     log(...args: any[]) {
@@ -32,6 +34,11 @@ const logger = {
 } as const
 
 const HAS_NOT_RENDERED_YET = -1
+
+export interface GameOptions {
+    developmentMode: boolean
+    performanceMeter: Stats
+}
 
 export function createGame(options: GameOptions): Game {
     const performanceMeter = options.performanceMeter
@@ -53,12 +60,16 @@ export function createGame(options: GameOptions): Game {
     const mainThread = new MainGameThread()
 
     const showMenu = ref(false)
-    // debug tools
     const debugCamera = createDebugCamera(camera, renderer.domElement)
     const paused = ref(false)
     const renderCount = ref(0)
     const debugCameraEnabled = ref(false)
-    // end
+
+    const showFatalErrorMessage = ref(false)
+    const fatalErrorDetails = ref("no error")
+    const fatalErrorSource = ref("no error")
+    const allowFatalErrorMessageToClose = ref(false)
+    let hasBeenNotifiedAboutFatalError = false
 
     scene.background = createWorldBackground([
         '/game/basic/posx.jpg',
@@ -101,17 +112,36 @@ export function createGame(options: GameOptions): Game {
 
             if (engineOptions.loadFromCrash) {
                 engineOptions.loadFromCrash = false
+                /* 
+                    if fatal error occurs
+                    only stop showing user the error
+                    popup after thread has been restarted
+                    and pings the rendering thread again 
+                */
+                allowFatalErrorMessageToClose.value = true
             }
         },
-        respondToFatalError() {
+        respondToFatalError(_: Float64Array, meta: string[], id: number) {
+            if (hasBeenNotifiedAboutFatalError) {
+                return
+            }
             /* tell user about error */
+            hasBeenNotifiedAboutFatalError = true
+            const [likeyErrorSource, errorDetail] = meta
+            fatalErrorDetails.value = errorDetail
+            fatalErrorSource.value = likeyErrorSource
+            allowFatalErrorMessageToClose.value = false
+            showFatalErrorMessage.value = true
+
             logger.warn("main thread has encountered fatal error, preparing for restart...")
-            mainThread.prepareForRestart(2)
+            logger.warn("fatal error described in message", id)
+            mainThread.prepareForRestart(id)
             engineOptions.loadFromCrash = true
         },
         readyForRestart() {
             logger.log("⚡recieved restart confirmation")
             mainThread.restart()
+            hasBeenNotifiedAboutFatalError = false
         }
 
     }
@@ -178,7 +208,16 @@ export function createGame(options: GameOptions): Game {
 
     return {
         vueRefs(): UIReferences {
-            return { paused, showMenu, debugCameraEnabled, renderCount }
+            return { 
+                paused, 
+                showMenu, 
+                debugCameraEnabled, 
+                renderCount,
+                showFatalErrorMessage,
+                fatalErrorDetails,
+                fatalErrorSource,
+                allowFatalErrorMessageToClose
+            }
         },
         domElement(): HTMLCanvasElement {
             return renderer.domElement
@@ -241,6 +280,36 @@ export function createGame(options: GameOptions): Game {
             } else {
                 this.enableDebugCamera()
             }
+        },
+        closeFatalMessageNotice() {
+            showFatalErrorMessage.value = false
         }
     }
+}
+
+export interface Game {
+    vueRefs: () => UIReferences
+    domElement: () => HTMLCanvasElement
+    initialize: () => Promise<void>
+    destroy: () => void
+    run: () => void
+    togglePause: () => void
+    toggleMenu: () => void
+    enableDebugCamera: () => void
+    disableDebugCamera: () => void
+    toggleDebugCamera: () => void
+    closeFatalMessageNotice: () => void
+}
+
+export type VueRef<T> = Readonly<Ref<T>>
+
+export interface UIReferences {
+    paused: VueRef<boolean>
+    showMenu: VueRef<boolean>
+    debugCameraEnabled: VueRef<boolean>
+    renderCount: VueRef<number>
+    fatalErrorSource: VueRef<string>
+    showFatalErrorMessage: VueRef<boolean>
+    fatalErrorDetails: VueRef<string>
+    allowFatalErrorMessageToClose: VueRef<boolean>
 }

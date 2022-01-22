@@ -4,8 +4,12 @@
 // module alias section
 import helperGameThreadConstructor from "worker:@/libraries/workers/workerTypes/helperGameThread"
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
-import { sleepSeconds } from "@/libraries/misc"
-import { MainThreadHelperMessage, HelperGameThreadMessage, HelperGameThreadHandler } from "@/libraries/workers/types"
+import { 
+    MainThreadHelperMessage, 
+    HelperGameThreadMessage, 
+    HelperGameThreadHandler 
+} from "@/libraries/workers/types"
+import { mainThread } from "@/libraries/workers/workerComponents/mainThread/consts"
 
 const logger = {
     log(...args: any[]) {
@@ -19,277 +23,151 @@ const logger = {
     },
 } as const
 
-let streamCounterId = 0
-
-function generateMessageId(): number {
-    const id = streamCounterId
-    streamCounterId++
-    return id
-}
+const MAXIMUM_THREADS = navigator.hardwareConcurrency
+let messageIdCount = 0
 
 interface ThreadPoolOptions {
     threadCount: number
 }
 
-// can only be used inside a worker file
 export class HelperGameThreadPool {
-    private static MAXIMUM_THREADS = navigator.hardwareConcurrency
-    private static MAX_PING_TIMEOUT_SECONDS = 1
+    private pool: Worker[] = []
 
-    private threadPool: Worker[] = []
-    private threadWaitingIndicators: boolean[] = []
-    private requestedThreads = 0
-    /* readonly for public */
-    readonly endOfReadyThreads = 0
+    readonly totalThreads = 0
+    readonly requestedThreads = 0
+    readonly waitingOnJobs = false
 
-    constructor(options: ThreadPoolOptions) {
-        if (options.threadCount < 1) {
+    constructor({ threadCount }: ThreadPoolOptions) {
+        if (threadCount < 1) {
             logger.warn("thread pool spawning 0 threads, this may be an error")
         }
-        this.requestedThreads = options.threadCount
-        this.spawnPool()
-    }
 
-    threadCount(): Readonly<number> {
-        return this.threadPool.length
-    }
-
-    private spawnPool() {
-        const max = HelperGameThreadPool.MAXIMUM_THREADS
-        const requested = this.requestedThreads
-        const spawnCount = requested > max ? max : requested
-        const HAS_NOT_CONFIRMED_READINESS = true
+        (this.requestedThreads as number) = threadCount
+        
+        const spawnCount = threadCount > MAXIMUM_THREADS ? MAXIMUM_THREADS : threadCount
         for (let i = 0; i < spawnCount; i++) {
-            const thread = this.spawnThread(i)
-            this.threadPool.push(thread)
-            this.threadWaitingIndicators.push(HAS_NOT_CONFIRMED_READINESS)
-        }
-    }
-
-    private spawnThread(id: number): Worker {
-        const thread = helperGameThreadConstructor()
-        thread.onerror = err => logger.error(
-            "fatal error occurred when pinging game helper thread", id, ", err:",  err
-        )
-
-        thread.onmessageerror = message => logger.error(
-            "no onmessageerror handler has been set for game helper thread",
-            id,
-            ", message:",
-            message
-        )
-
-        thread.onmessage = message => logger.log(
-            "no onmessage handler has been set for game helper thread",
-            id,
-            ", message:",
-            message
-        ) 
-        return thread
-    }
-
-    private pingThread(workerId: number): Promise<void> {
-        const thread = this.threadPool[workerId]
-        this.threadWaitingIndicators[workerId] = true
-        const THREAD_IS_READY_FOR_WORK = false
-        const THREAD_CANNOT_DO_WORK = true
-        return new Promise((resolve, reject) => {
-            thread.onmessage = (message: MessageEvent<MainThreadHelperMessage>) => {
-                const { handler } = message.data
-                /* if returned with error, allow thread to timeout */
-                if (handler === "jobCouldNotComplete") {
-                    return
-                }
-                logger.log("game helper thread", workerId, "responded to ping")
-                resolve()
-                this.threadWaitingIndicators[workerId] = THREAD_IS_READY_FOR_WORK
-            }
-
-            thread.onmessageerror = (message: MessageEvent<MainThreadHelperMessage>) => {
-                logger.error("error occur when recieving message from game helper thread", workerId)
-                logger.error("message:", message.data)
-                reject()
-                this.threadWaitingIndicators[workerId] = THREAD_CANNOT_DO_WORK
-            }
-
-            const payload = new Float64Array([workerId])
-            const message: HelperGameThreadMessage = {
-                payload,
-                handler: "acknowledgePing",
-                meta: [],
-                id: generateMessageId()
-            }
-            thread.postMessage(message, [payload.buffer])
-        })
-    }
-
-    async initialize(): Promise<void> {
-        const threadPool = this.threadPool
-        const threadWaitingIndicators = this.threadWaitingIndicators
-
-        threadPool.forEach((_, index) => this.pingThread(index))
-        await sleepSeconds(HelperGameThreadPool.MAX_PING_TIMEOUT_SECONDS)
-
-        for (let i = threadWaitingIndicators.length - 1; i >= 0; i--) {
-            const notWaiting = !threadWaitingIndicators[i]
-            if (notWaiting) {
-                continue
-            }
-            // essentially if thread hasn't responded to initialization "ping"
-            // it's considered unusable and is removed from thread pool 
-            logger.warn(
-                "game helper thread", 
-                i, 
-                "didn't respond to initalization ping. Removing from thread pool"
+            const id = i
+            const worker = helperGameThreadConstructor()
+            worker.onerror = err => logger.error(
+                "fatal error occurred when pinging game helper thread", id, ", err:",  err
             )
-            threadPool[i].terminate()
-            threadPool.splice(i, 1)
-            threadWaitingIndicators.splice(i, 1)
+            worker.onmessageerror = message => logger.error(
+                "no onmessageerror handler has been set for game helper thread",
+                id,
+                ", message:",
+                message
+            )
+            worker.onmessage = message => logger.log(
+                "no onmessage handler has been set for game helper thread",
+                id,
+                ", message:",
+                message
+            )
+            this.pool.push(worker)
         }
-
-        if (threadPool.length < 1) {
-            logger.warn("no threads have been correctly initialized")
-        }
-        (this.endOfReadyThreads as number) = threadPool.length    
+        (this.totalThreads as number) = this.pool.length
     }
 
     private createJob(
+            worker: Worker,
             workerId: number, 
             handler: HelperGameThreadHandler, 
             payload: Float64Array,
             threadPool: Worker[],
-            threadWaitingIndicators: boolean[]
+            rejectOnErr: boolean
         ): Promise<Float64Array> {
-
-        const thread = threadPool[workerId]
-        threadWaitingIndicators[workerId] = true
         return new Promise((resolve, reject) => {
-            thread.onmessage = (message: MessageEvent<MainThreadHelperMessage>) => {
+            worker.onmessage = (message: MessageEvent<MainThreadHelperMessage>) => {
                 const { handler, payload } = message.data
-                if (handler === "jobCouldNotComplete") {
-                    /* 
-                        temporary solution,
-                        what should probably happen is another retry,
-                        or have this thread complete the work that 
-                        the helper thread couldn't complete? 
-                    */
-                    reject()
-                } else {
+                if (handler !== "jobCouldNotComplete") {
                     resolve(payload)
                 }
-                threadWaitingIndicators[workerId] = false
+
+                if (rejectOnErr) {
+                    return reject()
+                }
+                const previousOnMessage = worker.onmessage
+                const previousOnMessageError = worker.onmessageerror
+                worker.terminate()
+                const newWorker = helperGameThreadConstructor()
+                newWorker.onmessage = previousOnMessage
+                newWorker.onmessageerror = previousOnMessageError
+                threadPool[workerId] = newWorker
+                const reinitializationMessage: HelperGameThreadMessage = {
+                    handler: "acknowledgePing",
+                    payload: new Float64Array(),
+                    meta: [workerId.toString()],
+                    id: mainThread.reinitalizedWorkerMessageId
+                }
+                newWorker.postMessage(reinitializationMessage, [reinitializationMessage.payload.buffer])
+                /* 
+                    if failed, do job on main thread,
+                    and create new worker
+                    to be implemented
+                */
+                resolve(payload)
             }
 
-            thread.onmessageerror = (message: MessageEvent<MainThreadHelperMessage>) => {
+            worker.onmessageerror = (message: MessageEvent<MainThreadHelperMessage>) => {
                 logger.error(
                     "error occur when recieving message from game helper thread", 
                     workerId
                 )
                 logger.error("message:", message.data)
                 reject()
-                threadWaitingIndicators[workerId] = false
             }
 
+            const id = messageIdCount
+            messageIdCount++
             const message: HelperGameThreadMessage = {
                 handler,
                 payload,
-                meta: [],
-                id: generateMessageId()
+                meta: [workerId.toString()],
+                id
             }
-            thread.postMessage(message, [payload.buffer])
+            worker.postMessage(message, [payload.buffer])
         })
     }
 
     // distributes an inputted job over all available threads
     // and returns a promise that fulfills when all threads
-    // are finished (similar to calling "join" on all threads) 
-    spawnParallelJob(handler: HelperGameThreadHandler, payload: Float64Array): Promise<Float64Array[]> {
+    // are finished (similar to calling "join" on all threads)
+    // if none are available, main thread will do all of work
+    async spawnParallelJob(handler: HelperGameThreadHandler, payload: Float64Array, rejectOnErr: boolean): Promise<Float64Array[]> {
+        (this.waitingOnJobs as boolean) = true
+        
+        const threadPool = this.pool
         const jobPromises = []
-        let workersForJob = 0
         const executorFunction = this.createJob
-        const threadPool = this.threadPool
-        const threadWaitingIndicators = this.threadWaitingIndicators
         for (let i = 0; i < threadPool.length; i++) {
-            const isWaitingOnJob = threadWaitingIndicators[i]
-            if (isWaitingOnJob) {
-                continue
-            }
-
+            /* payload needs to be sliced among all workers */
             const promise = executorFunction(
-                i, 
-                handler, 
-                payload,
+                threadPool[i],
+                i,
+                handler,
+                // temporary 
+                payload.slice(),
                 threadPool,
-                threadWaitingIndicators
+                rejectOnErr
             )
             jobPromises.push(promise)
-            workersForJob++
         }
-        
-        if (workersForJob < 1) {
-            logger.warn("there seems to be no workers available for job, this is probably an error")
+        try {
+            const res = await Promise.all(jobPromises)
+            return res
+        } catch(err) {
+            throw err
+        } finally {
+            (this.waitingOnJobs as boolean) = false
         }
-
-        return Promise.all(jobPromises)
     }
 
-    // creates a job for one thread and marks it as busy.
-    // note: using this too often lowers the effectiveness
-    // of "spawnParallelJob" as distributed jobs will have one
-    // less thread to work with
-    spawnJob(
-        handler: HelperGameThreadHandler, 
-        payload: Float64Array,
-        onComplete: (data: MainThreadHelperMessage) => void
-    ): Promise<void> {
-        const threadWaitingIndicators = this.threadWaitingIndicators
-        const availableWorkerIndex = threadWaitingIndicators.findIndex(isWaiting => !isWaiting)
-
-        if (availableWorkerIndex === -1) {
-            throw Error(mainThreadIdentity() + " no threads available for attempted job spawn")
+    async initialize(): Promise<void> {
+        try {
+            const workerRes = await this.spawnParallelJob("acknowledgePing", new Float64Array(), true)
+            workerRes.forEach((_, workerId) => logger.log("game helper thread", workerId, "responded to ping"))
+        } catch(err) {
+            throw err
         }
-
-        threadWaitingIndicators[availableWorkerIndex] = true
-        const thread = this.threadPool[availableWorkerIndex]
-
-        const onPromiseReturn = () => {
-            threadWaitingIndicators[availableWorkerIndex] = false
-        }
-
-        return new Promise((resolve, reject) => {
-            thread.onmessage = (message: MessageEvent<MainThreadHelperMessage>) => {
-                const { handler } = message.data
-                if (handler === "jobCouldNotComplete") {
-                    /* 
-                        temporary solution,
-                        what should probably happen is another retry,
-                        or have this thread complete the work that 
-                        the helper thread couldn't complete? 
-                    */
-                    reject()
-                }
-                onComplete(message.data)
-                onPromiseReturn()
-                resolve()
-            }
-
-            thread.onmessageerror = (message: MessageEvent<MainThreadHelperMessage>) => {
-                logger.error(
-                    "error occur when recieving message from game helper thread", 
-                    availableWorkerIndex
-                )
-                logger.error("message:", message.data)
-                onPromiseReturn()
-                reject()
-            }
-
-            const message: HelperGameThreadMessage = {
-                handler,
-                payload,
-                meta: [],
-                id: generateMessageId()
-            }
-            thread.postMessage(message, [payload.buffer])
-        })
     }
 }
