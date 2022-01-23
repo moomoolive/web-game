@@ -5,7 +5,6 @@ import Stats from "stats.js"
 import { Player } from "./player"
 import { globals } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
-import { MainGameThread } from "@/libraries/workers/threadTypes/mainGameThread"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
 import { 
     createDebugCamera, 
@@ -16,24 +15,22 @@ import {
     createWorldPlane,
     EngineIndicator
 } from "./utils/initialization"
-import { renderingThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
-import { RenderingThreadHandlerLookup, } from "@/libraries/workers/types"
-import { EngineOptions } from "./types"
-
+import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
+import { WorkerPool } from "@/libraries/workers/threadPool"
+import { errors, rendering } from "./consts"
+import { AppDatabase } from "@/libraries/appDB/index"
 
 const logger = {
     log(...args: any[]) {
-        console.log(renderingThreadIdentity(), ...args)
+        console.log(mainThreadIdentity(), ...args)
     },
     warn(...args: any[]) {
-        console.warn(renderingThreadIdentity(), ...args)
+        console.warn(mainThreadIdentity(), ...args)
     },
     error(...args: any[]) {
-        console.error(renderingThreadIdentity(), ...args)
+        console.error(mainThreadIdentity(), ...args)
     },
 } as const
-
-const HAS_NOT_RENDERED_YET = -1
 
 export interface GameOptions {
     developmentMode: boolean
@@ -42,12 +39,13 @@ export interface GameOptions {
 
 export function createGame(options: GameOptions): Game {
     const performanceMeter = options.performanceMeter
+    const db = new AppDatabase()
 
     // for garbage collection
     const sceneGeometry: three.BufferGeometry[] = []
     const sceneMaterials: three.Material[] = []
 
-    let previousFrameTimestamp = HAS_NOT_RENDERED_YET
+    let previousFrameTimestamp = rendering.hasNotRenderedYet
     const renderer = createRenderer()
     const camera = createSceneCamera()
     const scene = new three.Scene()
@@ -57,7 +55,7 @@ export function createGame(options: GameOptions): Game {
 
     const mainEngineIndicator = new EngineIndicator()
 
-    const mainThread = new MainGameThread()
+    const workerPool = new WorkerPool({ threadCount: 2 })
 
     const showMenu = ref(false)
     const debugCamera = createDebugCamera(camera, renderer.domElement)
@@ -69,7 +67,6 @@ export function createGame(options: GameOptions): Game {
     const fatalErrorDetails = ref("no error")
     const fatalErrorSource = ref("no error")
     const allowFatalErrorMessageToClose = ref(false)
-    let hasBeenNotifiedAboutFatalError = false
 
     scene.background = createWorldBackground([
         '/game/basic/posx.jpg',
@@ -91,86 +88,6 @@ export function createGame(options: GameOptions): Game {
             thirdPersonCamera = new ThirdPersonCamera(camera, player.model)
         })
         .catch(err => logger.error("ASSET_LOADING_ERROR:", err))
-    
-    const engineOptions: EngineOptions = {
-        loadFromCrash: false
-    }
-
-    const HANDLER_LOOKUP: Readonly<RenderingThreadHandlerLookup> = {
-        keyDownResponse(payload: Float64Array) {
-            const [keyCode] = payload
-            player.onKeyDown(keyCode)
-        },
-        keyUpResponse(payload: Float64Array) {
-            const [keyCode] = payload
-            player.onKeyUp(keyCode)
-        },
-        acknowledgePing(_: Float64Array, __: string[], id: number) {
-            logger.log("ping acknowledged @", Date.now())
-            mainEngineIndicator.setReady()
-            mainThread.renderingPingAcknowledged(id, engineOptions)
-
-            if (engineOptions.loadFromCrash) {
-                engineOptions.loadFromCrash = false
-                /* 
-                    if fatal error occurs
-                    only stop showing user the error
-                    popup after thread has been restarted
-                    and pings the rendering thread again 
-                */
-                allowFatalErrorMessageToClose.value = true
-            }
-        },
-        respondToFatalError(_: Float64Array, meta: string[], id: number) {
-            if (hasBeenNotifiedAboutFatalError) {
-                return
-            }
-            /* tell user about error */
-            hasBeenNotifiedAboutFatalError = true
-            const [likeyErrorSource, errorDetail] = meta
-            fatalErrorDetails.value = errorDetail
-            fatalErrorSource.value = likeyErrorSource
-            allowFatalErrorMessageToClose.value = false
-            showFatalErrorMessage.value = true
-
-            logger.warn("main thread has encountered fatal error, preparing for restart...")
-            logger.warn("fatal error described in message", id)
-            mainThread.prepareForRestart(id)
-            engineOptions.loadFromCrash = true
-        },
-        readyForRestart() {
-            logger.log("⚡recieved restart confirmation")
-            mainThread.restart()
-            hasBeenNotifiedAboutFatalError = false
-        }
-
-    }
-
-    mainThread.setOnMessageHandler(message => {
-        const data = message.data
-        try {
-            const { id, payload, meta, handler } = data 
-            HANDLER_LOOKUP[handler](payload, meta, id)
-        } catch(err) {
-            logger.warn("something went wrong when looking up function")
-            logger.warn("message:", data)
-            logger.error("error:", err)
-        }
-    })
-
-    function onKeyDown(event: KeyboardEvent) {
-        if (event.repeat) {
-            return
-        }
-        mainThread.notifyKeyDown(event)
-    }
-
-    function onKeyUp(event: KeyboardEvent) {
-        if (event.repeat) {
-            return
-        }
-        mainThread.notifyKeyUp(event)
-    }
 
     function onWindowResize() {
         camera.aspect = window.innerWidth / window.innerHeight
@@ -184,26 +101,121 @@ export function createGame(options: GameOptions): Game {
         player.update(timeElapsedSeconds)
     }
 
+    async function restartEngine() {
+        logger.warn("engine has requested restart, probably due to an unrecoverable error")
+        logger.warn("⚡restarting immediately...")
+        logger.log("preparing for backup")
+        try {
+            /* presumably this will be the game state when figured out */
+            const state = {}
+            await db.createCrashSave(JSON.stringify(state))
+            logger.log("backup successfully created")
+        } catch(err) {
+            logger.error("backup protocol failed, error:", err)
+        }
+        logger.log("⚡ready for restart")
+    }
+
+    const EVENT_HANDLER_LOOKUP: Readonly<MainThreadEventHandlerLookup> = {
+        keyDown(payload: number[]) {
+            const [keyCode] = payload
+            player.onKeyDown(keyCode)
+        },
+        keyUp(payload: number[]) {
+            const [keyCode] = payload
+            player.onKeyUp(keyCode)
+        }
+    }
+
+    let loopRetryCount = 0
+    let resetLoopRetryCountTimerId = errors.timerNotDefinedYet
+    let incomingEventsQueue: MainThreadEvent[] = []
+
+    function handleIncomingEvents() {
+        for (let i = 0; i < incomingEventsQueue.length; i++) {
+            const { id, payload, handler } = incomingEventsQueue[i]
+            try {
+                EVENT_HANDLER_LOOKUP[handler](payload, id)
+            } catch(err) {
+                logger.warn("something went wrong when looking up handler for incoming event")
+                logger.warn("event:", incomingEventsQueue[i])
+                logger.error("error", err)
+            }
+        }
+        /* 
+            all unsuccesful events are forgotten
+            so that event queue doesn't clog 
+        */
+        incomingEventsQueue = []
+    }
+
+    function loadGameStateFromCrashSave() {
+
+    }
+    
     function renderLoop() {
-        window.requestAnimationFrame(currentTimestamp => {
-            if (paused.value) {
-                performanceMeter.begin()
-            }
-            if (previousFrameTimestamp === HAS_NOT_RENDERED_YET) {
+        window.requestAnimationFrame(async (currentTimestamp) => {
+            try {
+                if (paused.value) {
+                    performanceMeter.begin()
+                }
+                handleIncomingEvents()
+                const timeElaspsedMilliseconds = currentTimestamp - previousFrameTimestamp
                 previousFrameTimestamp = currentTimestamp
+                renderer.render(scene, camera)
+                if (paused.value) {
+                    return renderLoop()
+                }
+                updateEntities(timeElaspsedMilliseconds)
+                thirdPersonCamera.update(timeElaspsedMilliseconds)
+                renderCount.value++
+                performanceMeter.end()
+                renderLoop()
+            } catch(err) {
+                logger.error("an uncaught exception occurred in game loop. Restarting! Error:", err)
+                loopRetryCount++
+                clearTimeout(resetLoopRetryCountTimerId)
+                setTimeout(() => loopRetryCount = 0, errors.resetRetryCountAfter)
+                if (loopRetryCount < errors.maxRetryCount) {
+                    return renderLoop()
+                }
+                logger.warn(
+                    "loop has failed more than",
+                    errors.maxRetryCount,
+                    "times, this error is probably fatal.",
+                    "Engine will attempt to restart"
+                )
+
+                fatalErrorDetails.value = (err as string)?.toString()
+                fatalErrorSource.value = "gameLoopError"
+                allowFatalErrorMessageToClose.value = false
+                showFatalErrorMessage.value = true
+
+                await restartEngine()
+                loadGameStateFromCrashSave()
+
+                allowFatalErrorMessageToClose.value = true
+                renderLoop()
             }
-            renderer.render(scene, camera)
-            if (paused.value) {
-                return renderLoop()
-            }
-            const timeElaspsedMilliseconds = currentTimestamp - previousFrameTimestamp
-            updateEntities(timeElaspsedMilliseconds)
-            thirdPersonCamera.update(timeElaspsedMilliseconds)
-            previousFrameTimestamp = currentTimestamp
-            renderCount.value++
-            performanceMeter.end()
-            renderLoop()
         })
+    }
+
+    function addToEventQueue(payload: number[], id: number, handler: EventHandlers) {
+        incomingEventsQueue.push({ payload, id, handler })
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+        if (event.repeat) {
+            return
+        }
+        addToEventQueue([event.keyCode], 1, "keyDown")
+    }
+
+    function onKeyUp(event: KeyboardEvent) {
+        if (event.repeat) {
+            return
+        }
+        addToEventQueue([event.keyCode], 1, "keyUp")
     }
 
     return {
@@ -222,21 +234,29 @@ export function createGame(options: GameOptions): Game {
         domElement(): HTMLCanvasElement {
             return renderer.domElement
         },
+        async waitUntilReady(): Promise<void> {
+            await mainEngineIndicator.awaitReadySignal()
+        },
         async initialize(): Promise<void> {
             try {
-                //await mainEngineIndicator.awaitReadySignal()
-                window.addEventListener("resize", onWindowResize)
+                await workerPool.initialize()
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)
-            } catch {
-                throw new Error("main thread could not initalize, engine is shutting down")
+                window.addEventListener("resize", onWindowResize)
+                logger.log("🔥game loop ready")
+                mainEngineIndicator.setReady()
+            } catch(err) {
+                fatalErrorDetails.value = (err as string)?.toString()
+                fatalErrorSource.value = "initalization protocol"
+                allowFatalErrorMessageToClose.value = true
+                showFatalErrorMessage.value = true
+                throw err
             }
         },
         destroy() {
             window.removeEventListener("resize", onWindowResize)
             window.removeEventListener("keydown", onKeyDown)
             window.removeEventListener("keyup", onKeyDown)
-
             player.destroy()
             sceneGeometry.map(geometry => geometry.dispose())
             sceneMaterials.map(material => material.dispose())
@@ -244,12 +264,9 @@ export function createGame(options: GameOptions): Game {
             garbageCollectWebGLContext(renderer.domElement)
             debugCamera.dispose()
             renderer.dispose()
-            mainThread.terminate()
+            workerPool.terminate()
         },
         run() {
-            if (paused.value) {
-                return
-            }
             renderLoop()
         },
         togglePause() {
@@ -299,6 +316,7 @@ export interface Game {
     disableDebugCamera: () => void
     toggleDebugCamera: () => void
     closeFatalMessageNotice: () => void
+    waitUntilReady: () => Promise<void>
 }
 
 export type VueRef<T> = Readonly<Ref<T>>
@@ -312,4 +330,21 @@ export interface UIReferences {
     showFatalErrorMessage: VueRef<boolean>
     fatalErrorDetails: VueRef<string>
     allowFatalErrorMessageToClose: VueRef<boolean>
+}
+
+type EventHandlers = "keyUp" | "keyDown"
+
+interface MainThreadEvent {
+    payload: number[],
+    id: number
+    handler: EventHandlers
+}
+
+type MainThreadEventHandler = ((payload: number[], id: number) => void) |
+    ((payload: number[]) => void) |
+    (() => void)
+
+
+type MainThreadEventHandlerLookup = {
+    [key in EventHandlers]: MainThreadEventHandler
 }

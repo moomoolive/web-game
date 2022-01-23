@@ -202,6 +202,7 @@ import {
 import { createGame } from '@/libraries/gameEngine/index'
 import { useActions } from '@/store/lib'
 import loadingSpinner from '@/components/misc/loadingSpinner.vue'
+import { sleepSeconds } from '@/libraries/misc'
 
 const router = useRouter()
 const { confirm } = useActions()
@@ -214,6 +215,7 @@ const game = createGame({
     developmentMode: true, 
     performanceMeter,
 })
+game.initialize()
 document.body.appendChild(game.domElement())
 
 // these are readonly; change can only be made from
@@ -231,9 +233,6 @@ const {
 
 const showErrorDetails = ref(false)
 const showOverlay = ref(true)
-
-const milliseconds = 3_000
-window.setTimeout(() => showOverlay.value = false, milliseconds)
 
 async function toMainMenu() {
     const consent = await confirm.modal({ 
@@ -263,15 +262,15 @@ onUnmounted(() => {
  
 onMounted(async () => {
     try {
-        await game.initialize() 
-        const milliseconds = 2_000
-        window.setTimeout(() => {
-            document.body.appendChild(game.domElement())
-            document.body.appendChild(performanceMeter.dom)
-            game.run() 
-        }, milliseconds)       
+        await game.waitUntilReady()
+        document.body.appendChild(game.domElement())
+        document.body.appendChild(performanceMeter.dom)
+        game.run()
+        await sleepSeconds(1)    
     } catch(err) {
         console.error("game mounting error", err)
+    } finally {
+        showOverlay.value = false  
     }
 })
 </script>
