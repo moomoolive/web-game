@@ -217,6 +217,7 @@ const game = createGame({
 })
 game.initialize()
 document.body.appendChild(game.domElement())
+document.body.appendChild(performanceMeter.dom)
 
 // these are readonly; change can only be made from
 // inside game engine
@@ -263,10 +264,8 @@ onUnmounted(() => {
 onMounted(async () => {
     try {
         await game.waitUntilReady()
-        document.body.appendChild(game.domElement())
-        document.body.appendChild(performanceMeter.dom)
-        game.run()
         await sleepSeconds(1)    
+        game.run()
     } catch(err) {
         console.error("game mounting error", err)
     } finally {

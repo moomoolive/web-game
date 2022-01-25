@@ -117,7 +117,7 @@ const RESET_LOOP_RETRY_COUNT_MILLISECONDS = 3_000
 
 async function gameLoop() {
     let errorMessage = "no message"
-    const threadPool = new HelperGameThreadPool({ threadCount: 2 })
+    const threadPool = new HelperGameThreadPool({ threadCount: 1 })
 
     try {
         await Promise.all([

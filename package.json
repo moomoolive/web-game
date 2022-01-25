@@ -22,6 +22,7 @@
     "@fortawesome/free-solid-svg-icons": "^5.15.4",
     "@fortawesome/vue-fontawesome": "^3.0.0-5",
     "@mdi/font": "5.9.55",
+    "bitecs": "^0.3.34",
     "dexie": "^3.2.0",
     "roboto-fontface": "*",
     "stats.js": "^0.17.0",

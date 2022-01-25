@@ -19,6 +19,17 @@ import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentitie
 import { WorkerPool } from "@/libraries/workers/threadPool"
 import { errors, rendering } from "./consts"
 import { AppDatabase } from "@/libraries/appDB/index"
+import { ECS } from "@/libraries/ecs/index"
+import { MainThreadEvent, EventHandlers } from "./types"
+import { 
+    createWorld, 
+    addEntity,
+    defineComponent,
+    Types,
+    addComponent,
+    removeComponent,
+    defineQuery,
+} from "bitecs"
 
 const logger = {
     log(...args: any[]) {
@@ -38,6 +49,30 @@ export interface GameOptions {
 }
 
 export function createGame(options: GameOptions): Game {
+    const world = createWorld()
+    world.name = "web-game"
+
+    const playerEntityId = addEntity(world)
+    
+    const Movement = defineComponent({
+        velocityX: Types.f64,
+        velocityY: Types.f64,
+        velocityZ: Types.f64,
+        quaternionX: Types.f64,
+        quaternionY: Types.f64,
+        quaternionZ: Types.f64,
+        quaternionW: Types.f64,
+    })
+
+    const movementQuery = defineQuery([Movement])
+
+    addComponent(world, Movement, playerEntityId)
+
+    const movementSystem = (w: typeof world) => {
+        const movementEntities = movementQuery(w)
+        return world
+    }
+
     const performanceMeter = options.performanceMeter
     const db = new AppDatabase()
 
@@ -55,7 +90,7 @@ export function createGame(options: GameOptions): Game {
 
     const mainEngineIndicator = new EngineIndicator()
 
-    const workerPool = new WorkerPool({ threadCount: 2 })
+    const workerPool = new WorkerPool({ threadCount: 1 })
 
     const showMenu = ref(false)
     const debugCamera = createDebugCamera(camera, renderer.domElement)
@@ -127,6 +162,27 @@ export function createGame(options: GameOptions): Game {
         }
     }
 
+    const ecs = new ECS()
+    const playerId = ecs.createEntity(true)
+    ecs.componentManager.controller.push({ entityId: playerId, targetEvents: "keyboard" })
+    ecs.addSystem("inputHandler", (incomingEventsQueue:MainThreadEvent[]) => {
+        for (let i = 0; i < incomingEventsQueue.length; i++) {
+            const { id, payload, handler } = incomingEventsQueue[i]
+            try {
+                EVENT_HANDLER_LOOKUP[handler](payload, id)
+            } catch(err) {
+                logger.warn("something went wrong when looking up handler for incoming event")
+                logger.warn("event:", incomingEventsQueue[i])
+                logger.error("error", err)
+            }
+        }
+        /* 
+            all unsuccesful events are forgotten
+            so that event queue doesn't clog 
+        */
+        incomingEventsQueue = []
+    })
+
     let loopRetryCount = 0
     let resetLoopRetryCountTimerId = errors.timerNotDefinedYet
     let incomingEventsQueue: MainThreadEvent[] = []
@@ -160,6 +216,7 @@ export function createGame(options: GameOptions): Game {
                     performanceMeter.begin()
                 }
                 handleIncomingEvents()
+                movementSystem(world)
                 const timeElaspsedMilliseconds = currentTimestamp - previousFrameTimestamp
                 previousFrameTimestamp = currentTimestamp
                 renderer.render(scene, camera)
@@ -173,6 +230,8 @@ export function createGame(options: GameOptions): Game {
                 renderLoop()
             } catch(err) {
                 logger.error("an uncaught exception occurred in game loop. Restarting! Error:", err)
+                /* off for now */
+                /*
                 loopRetryCount++
                 clearTimeout(resetLoopRetryCountTimerId)
                 setTimeout(() => loopRetryCount = 0, errors.resetRetryCountAfter)
@@ -191,11 +250,13 @@ export function createGame(options: GameOptions): Game {
                 allowFatalErrorMessageToClose.value = false
                 showFatalErrorMessage.value = true
 
+                
                 await restartEngine()
                 loadGameStateFromCrashSave()
-
+                
                 allowFatalErrorMessageToClose.value = true
-                renderLoop()
+                */
+                //renderLoop()
             }
         })
     }
@@ -330,14 +391,6 @@ export interface UIReferences {
     showFatalErrorMessage: VueRef<boolean>
     fatalErrorDetails: VueRef<string>
     allowFatalErrorMessageToClose: VueRef<boolean>
-}
-
-type EventHandlers = "keyUp" | "keyDown"
-
-interface MainThreadEvent {
-    payload: number[],
-    id: number
-    handler: EventHandlers
 }
 
 type MainThreadEventHandler = ((payload: number[], id: number) => void) |
