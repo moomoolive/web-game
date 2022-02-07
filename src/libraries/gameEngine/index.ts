@@ -2,7 +2,7 @@ import * as three from "three"
 import { ref, Ref } from "vue"
 import Stats from "stats.js"
 
-import { Player } from "./player"
+//import { Player } from "./player"
 import { globals } from "@/consts"
 import { ThirdPersonCamera } from "./camera"
 import { garbageCollectWebGLContext } from "@/libraries/webGL/index"
@@ -16,20 +16,10 @@ import {
     EngineIndicator
 } from "./utils/initialization"
 import { mainThreadIdentity } from "@/libraries/workers/devTools/threadIdentities"
-import { WorkerPool } from "@/libraries/workers/threadPool"
 import { errors, rendering } from "./consts"
 import { AppDatabase } from "@/libraries/appDB/index"
-import { ECS } from "@/libraries/ecs/index"
 import { MainThreadEvent, EventHandlers } from "./types"
-import { 
-    createWorld, 
-    addEntity,
-    defineComponent,
-    Types,
-    addComponent,
-    removeComponent,
-    defineQuery,
-} from "bitecs"
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader"
 
 const logger = {
     log(...args: any[]) {
@@ -48,31 +38,49 @@ export interface GameOptions {
     performanceMeter: Stats
 }
 
-export function createGame(options: GameOptions): Game {
-    const world = createWorld()
-    world.name = "web-game"
-
-    const playerEntityId = addEntity(world)
-    
-    const Movement = defineComponent({
-        velocityX: Types.f64,
-        velocityY: Types.f64,
-        velocityZ: Types.f64,
-        quaternionX: Types.f64,
-        quaternionY: Types.f64,
-        quaternionZ: Types.f64,
-        quaternionW: Types.f64,
+async function loadModel(modelHref: string): Promise<three.Group> {
+    return new Promise((resolve) => {
+      const loader = new FBXLoader()
+      loader.load(modelHref, fbx => resolve(fbx))  
     })
+}
 
-    const movementQuery = defineQuery([Movement])
+async function loadAnimation(animationHref: string): Promise<three.AnimationClip> {
+    return new Promise((resolve) => {
+      const loader = new FBXLoader()
+      loader.load(animationHref, fbx => resolve(fbx.animations[0]))  
+    })
+}
 
-    addComponent(world, Movement, playerEntityId)
+type AnimationIndex = {
+    [key: string]: { clip: three.AnimationClip, action: three.AnimationAction }
+}
 
-    const movementSystem = (w: typeof world) => {
-        const movementEntities = movementQuery(w)
-        return world
-    }
+interface AnimationComponent {
+    mixer: three.AnimationMixer,
+    animations: AnimationIndex
+    currentAnimation: string
+}
 
+interface MovementComponent {
+    velocity: {
+        x: number,
+        y: number,
+        z: number
+    },
+    acceleration: {
+        x: number,
+        y: number,
+        z: number
+    },
+    deceleration: {
+        x: number,
+        y: number,
+        z: number
+    },
+}
+
+export function createGame(options: GameOptions): Game {
     const performanceMeter = options.performanceMeter
     const db = new AppDatabase()
 
@@ -85,12 +93,9 @@ export function createGame(options: GameOptions): Game {
     const camera = createSceneCamera()
     const scene = new three.Scene()
     scene.add(createDirectionalLight())
-    const player = new Player()
-    let thirdPersonCamera = new ThirdPersonCamera(camera, player.model)
+    let thirdPersonCamera = new ThirdPersonCamera(camera, new three.Group())
 
     const mainEngineIndicator = new EngineIndicator()
-
-    const workerPool = new WorkerPool({ threadCount: 1 })
 
     const showMenu = ref(false)
     const debugCamera = createDebugCamera(camera, renderer.domElement)
@@ -117,12 +122,14 @@ export function createGame(options: GameOptions): Game {
     sceneGeometry.push(geometry)
     sceneMaterials.push(material)
 
+    /*
     player.initialize()
         .then(() => { 
             scene.add(player.model)
             thirdPersonCamera = new ThirdPersonCamera(camera, player.model)
         })
         .catch(err => logger.error("ASSET_LOADING_ERROR:", err))
+    */
 
     function onWindowResize() {
         camera.aspect = window.innerWidth / window.innerHeight
@@ -130,11 +137,13 @@ export function createGame(options: GameOptions): Game {
         renderer.setSize(window.innerWidth, window.innerHeight)
     }
 
+    /*
     // rename or remove?
     function updateEntities(timeElaspsedMilliseconds: number) {
         const timeElapsedSeconds = timeElaspsedMilliseconds / globals.MILLISECONDS_IN_SECOND
         player.update(timeElapsedSeconds)
     }
+    */
 
     async function restartEngine() {
         logger.warn("engine has requested restart, probably due to an unrecoverable error")
@@ -151,63 +160,25 @@ export function createGame(options: GameOptions): Game {
         logger.log("⚡ready for restart")
     }
 
+    /*
     const EVENT_HANDLER_LOOKUP: Readonly<MainThreadEventHandlerLookup> = {
         keyDown(payload: number[]) {
             const [keyCode] = payload
-            player.onKeyDown(keyCode)
+            //player.onKeyDown(keyCode)
         },
         keyUp(payload: number[]) {
             const [keyCode] = payload
-            player.onKeyUp(keyCode)
+            //player.onKeyUp(keyCode)
         }
     }
+    */
 
-    const ecs = new ECS()
-    const playerId = ecs.createEntity(true)
-    ecs.componentManager.controller.push({ entityId: playerId, targetEvents: "keyboard" })
-    ecs.addSystem("inputHandler", (incomingEventsQueue:MainThreadEvent[]) => {
-        for (let i = 0; i < incomingEventsQueue.length; i++) {
-            const { id, payload, handler } = incomingEventsQueue[i]
-            try {
-                EVENT_HANDLER_LOOKUP[handler](payload, id)
-            } catch(err) {
-                logger.warn("something went wrong when looking up handler for incoming event")
-                logger.warn("event:", incomingEventsQueue[i])
-                logger.error("error", err)
-            }
-        }
-        /* 
-            all unsuccesful events are forgotten
-            so that event queue doesn't clog 
-        */
-        incomingEventsQueue = []
-    })
-
-    let loopRetryCount = 0
-    let resetLoopRetryCountTimerId = errors.timerNotDefinedYet
     let incomingEventsQueue: MainThreadEvent[] = []
 
-    function handleIncomingEvents() {
-        for (let i = 0; i < incomingEventsQueue.length; i++) {
-            const { id, payload, handler } = incomingEventsQueue[i]
-            try {
-                EVENT_HANDLER_LOOKUP[handler](payload, id)
-            } catch(err) {
-                logger.warn("something went wrong when looking up handler for incoming event")
-                logger.warn("event:", incomingEventsQueue[i])
-                logger.error("error", err)
-            }
-        }
-        /* 
-            all unsuccesful events are forgotten
-            so that event queue doesn't clog 
-        */
-        incomingEventsQueue = []
-    }
-
-    function loadGameStateFromCrashSave() {
-
-    }
+    const playerId = 0
+    const movementComponent: MovementComponent[] = []
+    const modelComponent: three.Group[] = []
+    const animationComponent: AnimationComponent[] = []
     
     function renderLoop() {
         window.requestAnimationFrame(async (currentTimestamp) => {
@@ -215,20 +186,90 @@ export function createGame(options: GameOptions): Game {
                 if (paused.value) {
                     performanceMeter.begin()
                 }
-                handleIncomingEvents()
-                movementSystem(world)
                 const timeElaspsedMilliseconds = currentTimestamp - previousFrameTimestamp
+                const timeElaspedSeconds = timeElaspsedMilliseconds / 1_000
+
+                /* input system */
+                for (let i = 0; i < incomingEventsQueue.length; i++) {
+                    const { id, payload, handler } = incomingEventsQueue[i]
+                    const target = modelComponent[playerId]
+                    const [keyCode] = payload
+                    const axisAngle = new three.Vector3(0, 1, 0)
+                    const movementQuaternion = new three.Quaternion()
+                    switch (keyCode) {
+                        case 87: // w
+                            movementComponent[playerId].velocity.z += (movementComponent[playerId].velocity.z * timeElaspedSeconds)
+                            break
+                        case 65: // a
+                            movementQuaternion.setFromAxisAngle(axisAngle, 0.02)
+                            target.quaternion.copy(
+                                target.quaternion.clone().multiply(movementQuaternion)
+                            )
+                            break
+                        /*
+                        case 83: // s
+                            target.position.z -= 0.5
+                            break
+                        */
+                        case 68: // d
+                            movementQuaternion.setFromAxisAngle(axisAngle, -0.02)
+                            target.quaternion.copy(
+                                target.quaternion.clone().multiply(movementQuaternion)
+                            )
+                        break
+                    }
+                }
+                incomingEventsQueue = []
+
+                /* movement system */
+                for (let i = 0; i < movementComponent.length; i++) {
+                    const movement = movementComponent[i]
+                    const target = modelComponent[i]
+
+                    const frameDeccelerationX = (movement.deceleration.x + movement.velocity.x) * timeElaspedSeconds
+                    const frameDeccelerationY = (movement.deceleration.y + movement.velocity.y) * timeElaspedSeconds
+                    let frameDeccelerationZ = (movement.deceleration.z + movement.velocity.z) * timeElaspedSeconds
+                    frameDeccelerationZ = Math.sign(frameDeccelerationZ) * Math.min(
+                        Math.abs(frameDeccelerationZ), Math.abs(movement.velocity.z)
+                    )
+
+                    movement.velocity.x += frameDeccelerationX
+                    movement.velocity.y += frameDeccelerationY
+                    movement.velocity.z += frameDeccelerationZ
+
+                    const forwardMotion = new three.Vector3(0, 0, 1)
+                    forwardMotion.applyQuaternion(target.quaternion)
+                    forwardMotion.normalize()
+                    forwardMotion.multiplyScalar(movement.velocity.z * timeElaspedSeconds)
+                    target.position.add(forwardMotion)
+
+                    const sidewaysMotion = new three.Vector3(1, 0, 0)
+                    sidewaysMotion.applyQuaternion(target.quaternion)
+                    sidewaysMotion.normalize()
+                    sidewaysMotion.multiplyScalar(movement.velocity.x * timeElaspedSeconds)
+                    target.position.add(sidewaysMotion)
+                }
+
                 previousFrameTimestamp = currentTimestamp
                 renderer.render(scene, camera)
                 if (paused.value) {
                     return renderLoop()
                 }
-                updateEntities(timeElaspsedMilliseconds)
+                
+                /* animation system */
+                animationComponent.forEach(component => component.mixer.update(timeElaspedSeconds))
+                
+                /* camera system */
                 thirdPersonCamera.update(timeElaspsedMilliseconds)
+                
                 renderCount.value++
                 performanceMeter.end()
                 renderLoop()
             } catch(err) {
+                /*
+                let loopRetryCount = 0
+                let resetLoopRetryCountTimerId = errors.timerNotDefinedYet
+                */
                 logger.error("an uncaught exception occurred in game loop. Restarting! Error:", err)
                 /* off for now */
                 /*
@@ -300,7 +341,39 @@ export function createGame(options: GameOptions): Game {
         },
         async initialize(): Promise<void> {
             try {
-                await workerPool.initialize()
+                const [playerModel, idleClip, walkingClip] = await Promise.all([
+                    loadModel("/game/player/t-pose.fbx"),
+                    loadAnimation("/game/player/idle.fbx"),
+                    loadAnimation("/game/player/walking.fbx")
+                ])
+                playerModel.scale.setScalar(0.1)
+                scene.add(playerModel)
+                playerModel.traverse(c => c.castShadow = true)
+                modelComponent[0] = playerModel
+                const mixer = new three.AnimationMixer(playerModel)
+                animationComponent[0] = {
+                    animations: {
+                        idle: { 
+                            action: mixer.clipAction(idleClip),
+                            clip: idleClip 
+                        },
+                        walking: {
+                            action: mixer.clipAction(walkingClip),
+                            clip: walkingClip
+                        }
+                    },
+                    mixer,
+                    currentAnimation: "idle"
+                }
+                animationComponent[0].animations.idle.action.setEffectiveTimeScale(1.0)
+                animationComponent[0].animations.idle.action.setEffectiveWeight(1.0)
+                animationComponent[0].animations.idle.action.play()
+                movementComponent.push({ 
+                    velocity: { x: 0, y: 0, z: 0 },
+                    acceleration: { x: 1, y: 0.25, z: 50 },
+                    deceleration: { x: -0.0005, y: -0.0001, z: -50 }
+                })
+                thirdPersonCamera = new ThirdPersonCamera(camera, playerModel)
                 window.addEventListener("keydown", onKeyDown)
                 window.addEventListener("keyup", onKeyUp)
                 window.addEventListener("resize", onWindowResize)
@@ -318,14 +391,13 @@ export function createGame(options: GameOptions): Game {
             window.removeEventListener("resize", onWindowResize)
             window.removeEventListener("keydown", onKeyDown)
             window.removeEventListener("keyup", onKeyDown)
-            player.destroy()
+            //player.destroy()
             sceneGeometry.map(geometry => geometry.dispose())
             sceneMaterials.map(material => material.dispose())
             // do a canvas wide garbage collection, in case something was missed
             garbageCollectWebGLContext(renderer.domElement)
             debugCamera.dispose()
             renderer.dispose()
-            workerPool.terminate()
         },
         run() {
             renderLoop()

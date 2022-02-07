@@ -88,9 +88,6 @@ class Controller {
 
         this.#target.quaternion.copy(_R)
 
-        const oldPosition = new three.Vector3()
-        oldPosition.copy(this.#target.position)
-
         const forward = new three.Vector3(0, 0, 1)
         forward.applyQuaternion(this.#target.quaternion)
         forward.normalize()
@@ -104,8 +101,6 @@ class Controller {
 
         this.#target.position.add(forward)
         this.#target.position.add(sideways)
-
-        oldPosition.copy(this.#target.position)
     }
 }
 
