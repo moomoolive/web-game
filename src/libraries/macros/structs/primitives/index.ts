@@ -10,15 +10,20 @@ CommonSpecialSymbols
 
 export type Primitive = Char | StructBool | number
 
-export interface ArrayOfStruct {
-    indexAsObject: (index: number) => StructObjectRepersentation
-    indexAsTypedArray: (index: number) => TypedArray
-    indexAsArray: (index: number) => StructArrayRepersentation
+export interface ArrayOfStruct<ObjectRepersentation> {
+    indexAsObject: (index: number) => ObjectRepersentation
+    indexAsArray: (index: number) => TypedArray
     length: () => number
+    capacity: () => number
     structSize: () => number
     getMemory: () => TypedArray
     setMemory: ((newMemory: Float64Array) => void) |
     ((newMemory: Uint8Array) => void)
+    push: (...args: any) => void
+    pop: () => void
+    splice: (index: number) => void
+    set: (index: number, ...otherArgs: any) => void
+    unsafeSet: (index: number, ...otherArgs: any) => void
     isStructArray: () => boolean
 }
 
@@ -42,13 +47,7 @@ export function fastAbsoluteValue(input: number): number {
     return (input + (input >> 31)) ^ (input >> 31)
 }
 
-type StructObjectRepersentation = {
-    [key: string]: Primitive
-}
-
 type TypedArray = Float64Array | Uint8Array
-
-type StructArrayRepersentation = Primitive[]
 
 type UppercaseLetters = "A" |
 "B" |

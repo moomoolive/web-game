@@ -86,7 +86,7 @@ const enum StructEncoding {
     lengthIndex=${LENGTH_INDEX},
 
     // these values are more or less arbitrary.
-    // only use to confirm that data structure
+    // only use to confirm that the data structure
     // was created by this compiler at runtime
     encodingPaddingOneValue=${ENDCODING_INDICATOR_ONE_VALUE},
     encodingPaddingTwoValue=${ENDCODING_INDICATOR_TWO_VALUE},
@@ -104,21 +104,25 @@ const enum ${name}Encoding {
     structSize=${fields.length},
 
     // offsets
-${fields.map((meta, index) => `\t${meta.name}Offset = ${index}, // typeof ${meta.primitiveType}`).join("\n")}
+${fields.map((meta, index) => `\t${meta.name}Offset=${index}, // typeof ${meta.primitiveType}`).join("\n")}
 }
 
 const enum conversions {
     byteToFloat64Factor=4
 }
 
-export class ${name} implements ArrayOfStruct {
+export interface ${name}Object {
+${fields.map(meta => `\t${meta.name}: ${meta.primitiveType}`).join("\n")}
+}
+
+export class ${name} implements ArrayOfStruct<${name}Object> {
     // these are here for sanity checks.
     // not compiled away by typescript.
     // also not used at runtime.
     // can be used as debugging tool
     static readonly structSize = ${name}Encoding.structSize
 ${
-    fields.map(meta => `\tstatic readonly ${meta.name}Offset = ${name}Encoding.${meta.name}Offset`).join("\n")
+    fields.map(meta => `\tstatic readonly ${meta.name}Offset=${name}Encoding.${meta.name}Offset`).join("\n")
 }
     
     static fromBuffer(buffer: ArrayBuffer | SharedArrayBuffer): ${name} {
@@ -161,75 +165,18 @@ ${
             this.memory = memory
         }
     }
-
-    set(index: number, ${fields.map(meta => `${meta.name}: ${meta.primitiveType},`).join(" ")}) {
-        const i = fastAbsoluteValue(index)
-        const trueIndex = i * ${name}Encoding.structSize
-${
-    fields
-        .map(meta => `\t\tthis.memory[StructEncoding.encodingReservedIndicesCount + trueIndex + ${
-            `${name}Encoding.${meta.name}Offset`
-            }] = ${meta.type === "char" ? `${meta.name}.charCodeAt(0)` : meta.name}`
-        )
-        .join("\n")
-}
-    }
-${
-    fields.map(meta => {
-        return `
-    ${meta.name}Get(index: number): ${meta.primitiveType} {
-        const i = fastAbsoluteValue(index)
-        const trueIndex = i * ${name}Encoding.structSize
-        const value = this.memory[StructEncoding.encodingReservedIndicesCount + trueIndex + ${`${name}Encoding.${meta.name}Offset`}]
-        return ${meta.type === "char" ? "String.fromCharCode(value) as Char" : "value as " + meta.primitiveType}
+    
+    // returns underlying memory for array
+    getMemory(): Float64Array {
+        return this.memory
     }
 
-    ${meta.name}Set(index: number, value: ${meta.primitiveType}) {
-        const i = fastAbsoluteValue(index)
-        const trueIndex = i * ${name}Encoding.structSize
-        this.memory[StructEncoding.encodingReservedIndicesCount + trueIndex + ${`${name}Encoding.${meta.name}Offset`}] = ${
-            meta.type === "char" ?
-                "value.charCodeAt(0)" : "value"
-        }
-    }
-`
-    })
-    .join("")
-} 
-    indexAsObject(index: number): {${
-        fields.map(meta => `${meta.name}: ${meta.primitiveType},`).join(" ")
-    }} {
-        return {
-${
-    fields.map(meta => `\t\t\t${meta.name}: this.${meta.name}Get(index),`).join("\n")
-}
-        }
-    }
-
-    indexAsTypedArray(index: number): Float64Array {
-        const i = fastAbsoluteValue(index)
-        const trueIndex = i * ${name}Encoding.structSize
-        const startIndex = StructEncoding.encodingReservedIndicesCount + trueIndex
-        return this.memory.slice(startIndex, startIndex + ${name}Encoding.structSize)
-    }
-
-    indexAsArray(index: number): [${fields.map(meta => meta.primitiveType + ",").join(" ")}] {
-        return [
-${
-    fields.map(meta => `\t\t\tthis.${meta.name}Get(index),`).join("\n")
-}
-        ]
-    }
-
-    isStructArray(): boolean {
-        return isStructArray(this.memory)
-    }
-
-    // the number of indices an individual struct
-    // takes in array
-    // check compiler primitives for reference.
-    structSize(): number {
-        return this.memory[StructEncoding.structSizeIndex] || StructEncoding.encodingInformationMissing
+    // sets underlying memory of array from a TypedArray
+    // WARNING: this is an unsafe operation. Make sure the typed
+    // array you are using to overwrite with is a StructArray by 
+    // using the "isStructArray" utility function.
+    setMemory(newMemory: Float64Array) {
+        this.memory = newMemory
     }
 
     // number of structs in array is stored in this array
@@ -238,13 +185,172 @@ ${
         return this.memory[StructEncoding.lengthIndex] || StructEncoding.encodingInformationMissing
     }
 
-    getMemory(): Float64Array {
-        return this.memory
+    // returns number of elements that can be added before
+    // resize is needed
+    capacity(): number {
+        const rawMemory = this.memory.length - StructEncoding.encodingReservedIndicesCount
+        return rawMemory / ${name}Encoding.structSize
     }
 
-    setMemory(newMemory: Float64Array) {
-        this.memory = newMemory
+    /* array mutators */
+
+    // sets a given index in array with inputted values
+    // note: inputting an index greater than the length of array has no effect
+    set(index: number, ${fields.map(meta => `${meta.name}: ${meta.primitiveType},`).join(" ")}) {
+        const safeIndex = fastAbsoluteValue(index)
+        const indexOffset = safeIndex * ${name}Encoding.structSize
+${
+    fields
+        .map(meta => `\t\tthis.memory[StructEncoding.encodingReservedIndicesCount + indexOffset + ${
+            `${name}Encoding.${meta.name}Offset`
+            }] = ${meta.type === "char" ? `${meta.name}.charCodeAt(0)` : meta.name}`
+        )
+        .join("\n")
+}
     }
+
+    // sets a given index in array with inputted values in an unsafe manner
+    // WARNING: inputting a negative index may result in 
+    // memory corruption. Please make sure that an inputted
+    // index is non-negative by using the "fastAbsoluteValue" utility function.
+    // note: inputting an index greater than the length of array has no effect
+    unsafeSet(index: number, ${fields.map(meta => `${meta.name}: ${meta.primitiveType},`).join(" ")}) {
+        const indexOffset = index * ${name}Encoding.structSize
+${
+    fields
+        .map(meta => `\t\tthis.memory[StructEncoding.encodingReservedIndicesCount + indexOffset + ${
+            `${name}Encoding.${meta.name}Offset`
+            }] = ${meta.type === "char" ? `${meta.name}.charCodeAt(0)` : meta.name}`
+        )
+        .join("\n")
+}
+    }
+
+    // removes a given index from array
+    // note: do not use if order of array matters
+    // this method swaps last element and target element
+    // then pops the last element. This is far more performant
+    // than the typical array.splice
+    // Also: if you want the element back
+    // you must do this manually.
+    splice(index: number) {
+        const lastIndex = this.length() - 1
+        // make sure operation is valid
+        if (index > lastIndex) {
+            return
+        }
+        if (lastIndex === index) {
+            return this.pop()
+        }
+        // create temporary variables with last element's values
+${
+    fields.map(meta => `\t\tconst ${meta.name}Tmp = this.${meta.name}Get(lastIndex)`).join("\n")
+}
+        
+        // swap last element with target index
+        const safeIndex = fastAbsoluteValue(index)
+        this.unsafeSet(lastIndex, ${fields.map(meta => "this." + meta.name + "Get(safeIndex)," ).join(" ")})
+        this.unsafeSet(safeIndex, ${fields.map(meta => meta.name + "Tmp,").join(" ")})
+        
+        // now that target index is in last index, remove it
+        this.pop()
+    }
+
+    // adds inputted struct at end of the array
+    push(${fields.map(meta => `${meta.name}: ${meta.primitiveType},`).join(" ")}) {
+        const index = this.length() * ${name}Encoding.structSize
+${
+    fields
+        .map(meta => `\t\tthis.memory[StructEncoding.encodingReservedIndicesCount + index + ${
+            `${name}Encoding.${meta.name}Offset`
+            }] = ${meta.type === "char" ? `${meta.name}.charCodeAt(0)` : meta.name}`
+        )
+        .join("\n")
+}        
+        
+        // increment length count
+        this.memory[StructEncoding.lengthIndex]++
+    }
+
+    // removes the last element of array
+    // note: if you want the element back
+    // you must do this manually.
+    pop() {
+        if (this.length() < 1) {
+            return
+        }
+        // decrement length count
+        this.memory[StructEncoding.lengthIndex]--
+    }
+    /* array mutators end */
+
+    /* struct property setters and getters */
+${
+    fields.map(meta => {
+        return `
+    // a getter method for '${meta.name}' property
+    ${meta.name}Get(index: number): ${meta.primitiveType} {
+        const indexOffset = index * ${name}Encoding.structSize
+        const value = this.memory[StructEncoding.encodingReservedIndicesCount + indexOffset + ${name + "Encoding." + meta.name}Offset]
+        return ${meta.type === "char" ? "String.fromCharCode(value) as Char" : "value as " + meta.primitiveType}
+    }
+
+    // a setter method for '${meta.name}' property
+    ${meta.name}Set(index: number, value: ${meta.primitiveType}) {
+        const safeIndex = fastAbsoluteValue(index)
+        const indexOffset = safeIndex * ${name}Encoding.structSize
+        this.memory[StructEncoding.encodingReservedIndicesCount + indexOffset + ${name + "Encoding." + meta.name}Offset] = ${
+            meta.type === "char" ?
+                "value.charCodeAt(0)" : "value"
+        }
+    }
+
+    // an unsafe setter method for '${meta.name}' property
+    // WARNING: inputting a negative index may result in 
+    // memory corruption. Please make sure that an inputted
+    // index is non-negative by using the "fastAbsoluteValue" utility function.
+    ${meta.name}UnsafeSet(index: number, value: ${meta.primitiveType}) {
+        const indexOffset = index * ${name}Encoding.structSize
+        this.memory[StructEncoding.encodingReservedIndicesCount + indexOffset + ${name + "Encoding." + meta.name}Offset] = ${
+            meta.type === "char" ?
+                "value.charCodeAt(0)" : "value"
+        }
+    }
+`
+    })
+    .join("")
+}
+    // return a given index as a TypedArray
+    indexAsArray(index: number): Float64Array {
+        const indexOffset = index * ${name}Encoding.structSize
+        const startIndex = StructEncoding.encodingReservedIndicesCount + indexOffset
+        return this.memory.slice(startIndex, startIndex + ${name}Encoding.structSize)
+    }
+    /* struct property setters and getters end */
+
+    /* debugging tools */
+
+    // return a given index as a JS object
+    indexAsObject(index: number): ${name}Object {
+        return {
+${
+    fields.map(meta => `\t\t\t${meta.name}: this.${meta.name}Get(index),`).join("\n")
+}
+        }
+    }
+
+    // a runtime check to verify that memory
+    // hasn't been corrupted
+    isStructArray(): boolean {
+        return isStructArray(this.memory)
+    }
+
+    // the number of indices an individual struct takes in memory
+    // check compiler primitives for reference.
+    structSize(): number {
+        return this.memory[StructEncoding.structSizeIndex] || StructEncoding.encodingInformationMissing
+    }
+    /* debugging tools end */
 }
 /* struct compiler end */
 `.trim()
